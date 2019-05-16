@@ -39,7 +39,15 @@ def get_lint_files():
   def get(*path_components):
     return shakaBuildHelpers.get_all_files(
         os.path.join(base, *path_components), match)
-  return get('test') + get('lib') + get('externs') + get('demo') + get('ui')
+  main_sources = (get('test') + get('lib') + get('externs') + get('demo') +
+      get('ui'))
+  tool_sources = [
+      os.path.join(base, '.eslintrc.js'),
+      os.path.join(base, 'build', 'generateExterns.js'),
+      os.path.join(base, 'docs', 'jsdoc-plugin.js'),
+      os.path.join(base, 'karma.conf.js'),
+  ]
+  return main_sources + tool_sources
 
 
 def check_js_lint(args):
