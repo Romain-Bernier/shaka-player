@@ -49,13 +49,13 @@ shaka.ui.LanguageUtils = class {
         langMenu, 'shaka-back-to-overflow-button');
 
     // 2. Remove everything
-    shaka.ui.Utils.removeAllChildren(langMenu);
+    shaka.util.Dom.removeAllChildren(langMenu);
 
     // 3. Add the backTo Menu button back
     langMenu.appendChild(backButton);
 
     // 4. Add new buttons
-    languages.forEach((language) => {
+    for (const language of languages) {
       const button = shaka.util.Dom.createHTMLElement('button');
       button.addEventListener('click', () => {
         onLanguageSelected(language);
@@ -73,7 +73,7 @@ shaka.ui.LanguageUtils = class {
         currentSelectionElement.textContent = span.textContent;
       }
       langMenu.appendChild(button);
-    });
+    }
   }
 
 

@@ -61,20 +61,16 @@ describe('Player', () => {
   /** @type {!shaka.test.FakeVideo} */
   let video;
 
-  beforeAll(() => {
-    logErrorSpy = jasmine.createSpy('shaka.log.error');
-    shaka.log.error = shaka.test.Util.spyFunc(logErrorSpy);
-    logWarnSpy = jasmine.createSpy('shaka.log.warning');
-    shaka.log.warning = shaka.test.Util.spyFunc(logWarnSpy);
-    shaka.log.alwaysWarn = shaka.test.Util.spyFunc(logWarnSpy);
-  });
-
   beforeEach(() => {
     // By default, errors are a failure.
+    logErrorSpy = jasmine.createSpy('shaka.log.error');
     logErrorSpy.calls.reset();
-    logErrorSpy.and.callFake(fail);
+    shaka.log.error = shaka.test.Util.spyFunc(logErrorSpy);
 
-    logWarnSpy.calls.reset();
+    logWarnSpy = jasmine.createSpy('shaka.log.warning');
+    logErrorSpy.and.callFake(fail);
+    shaka.log.warning = shaka.test.Util.spyFunc(logWarnSpy);
+    shaka.log.alwaysWarn = shaka.test.Util.spyFunc(logWarnSpy);
 
     // Since this is not an integration test, we don't want MediaSourceEngine to
     // fail assertions based on browser support for types.  Pretend that all
@@ -149,15 +145,18 @@ describe('Player', () => {
     player.addEventListener('error', shaka.test.Util.spyFunc(onError));
   });
 
-  afterEach((done) => {
-    player.destroy().catch(fail).then(done);
+  afterEach(async () => {
+    try {
+      await player.destroy();
+    } finally {
+      shaka.log.error = originalLogError;
+      shaka.log.warning = originalLogWarn;
+      shaka.log.alwaysWarn = originalLogAlwaysWarn;
+      window.MediaSource.isTypeSupported = originalIsTypeSupported;
+    }
   });
 
   afterAll(() => {
-    shaka.log.error = originalLogError;
-    shaka.log.warning = originalLogWarn;
-    shaka.log.alwaysWarn = originalLogAlwaysWarn;
-    window.MediaSource.isTypeSupported = originalIsTypeSupported;
   });
 
   describe('destroy', () => {
@@ -2156,17 +2155,13 @@ describe('Player', () => {
       /* eslint-enable indent */
       const parser = new shaka.test.FakeManifestParser(manifest);
       const factory = () => parser;
-      try {
-        await player.load(fakeManifestUri, 0, factory);
-        fail();
-      } catch (error) {
-        shaka.test.Util.expectToEqualError(
-            error,
-            new shaka.util.Error(
-                shaka.util.Error.Severity.CRITICAL,
-                shaka.util.Error.Category.MANIFEST,
-                shaka.util.Error.Code.UNPLAYABLE_PERIOD));
-      }
+
+      const expected = Util.jasmineError(new shaka.util.Error(
+          shaka.util.Error.Severity.CRITICAL,
+          shaka.util.Error.Category.MANIFEST,
+          shaka.util.Error.Code.UNPLAYABLE_PERIOD));
+      await expectAsync(player.load(fakeManifestUri, 0, factory))
+          .toBeRejectedWith(expected);
     });
 
     it('throw CONTENT_UNSUPPORTED_BY_BROWSER when the only period is ' +
@@ -2178,17 +2173,13 @@ describe('Player', () => {
           .build();
       const parser = new shaka.test.FakeManifestParser(manifest);
       const factory = () => parser;
-      try {
-        await player.load(fakeManifestUri, 0, factory);
-        fail();
-      } catch (error) {
-        shaka.test.Util.expectToEqualError(
-            error,
-            new shaka.util.Error(
-                shaka.util.Error.Severity.CRITICAL,
-                shaka.util.Error.Category.MANIFEST,
-                shaka.util.Error.Code.CONTENT_UNSUPPORTED_BY_BROWSER));
-      }
+
+      const expected = Util.jasmineError(new shaka.util.Error(
+          shaka.util.Error.Severity.CRITICAL,
+          shaka.util.Error.Category.MANIFEST,
+          shaka.util.Error.Code.CONTENT_UNSUPPORTED_BY_BROWSER));
+      await expectAsync(player.load(fakeManifestUri, 0, factory))
+          .toBeRejectedWith(expected);
     });
 
     it('throw CONTENT_UNSUPPORTED_BY_BROWSER when all periods are unplayable',
@@ -2208,20 +2199,16 @@ describe('Player', () => {
 
           const parser = new shaka.test.FakeManifestParser(manifest);
           const factory = () => parser;
-          try {
-            await player.load(fakeManifestUri, 0, factory);
-            fail();
-          } catch (error) {
-            shaka.test.Util.expectToEqualError(
-                error,
-                new shaka.util.Error(
-                    shaka.util.Error.Severity.CRITICAL,
-                    shaka.util.Error.Category.MANIFEST,
-                    shaka.util.Error.Code.CONTENT_UNSUPPORTED_BY_BROWSER));
-          }
+
+          const expected = Util.jasmineError(new shaka.util.Error(
+              shaka.util.Error.Severity.CRITICAL,
+              shaka.util.Error.Category.MANIFEST,
+              shaka.util.Error.Code.CONTENT_UNSUPPORTED_BY_BROWSER));
+          await expectAsync(player.load(fakeManifestUri, 0, factory))
+              .toBeRejectedWith(expected);
         });
 
-    it('throw UNPLAYABLE_PERIOD when the new period is unplayable', (done) => {
+    it('throw UNPLAYABLE_PERIOD when the new period unplayable', async () => {
       /* eslint-disable indent */
       manifest = new shaka.test.ManifestGenerator()
           .addPeriod(0)
@@ -2231,29 +2218,28 @@ describe('Player', () => {
               .addVideo(1).mime('video/mp4', 'good')
           .build();
       /* eslint-enable indent */
+      /** @type {!shaka.test.FakeManifestParser} */
       const parser = new shaka.test.FakeManifestParser(manifest);
       const factory = () => parser;
-      player.load(fakeManifestUri, 0, factory).catch(fail).then(() => {
-        /* eslint-disable indent */
-        const manifest2 = new shaka.test.ManifestGenerator()
-            .addPeriod(0)
-              .addVariant(0).bandwidth(500)
-                .addVideo(0).mime('video/mp4', 'bad')
-            .build();
-        /* eslint-enable indent */
-        manifest.periods.push(manifest2.periods[0]);
-        try {
-          parser.playerInterface.filterNewPeriod(manifest2.periods[0]);
-          fail('filter period wrong');
-        } catch (error) {
-          shaka.test.Util.expectToEqualError(
-              error,
-              new shaka.util.Error(
-                  shaka.util.Error.Severity.CRITICAL,
-                  shaka.util.Error.Category.MANIFEST,
-                  shaka.util.Error.Code.UNPLAYABLE_PERIOD));
-        }
-      }).catch(fail).then(done);
+
+      await player.load(fakeManifestUri, 0, factory);
+
+      /* eslint-disable indent */
+      const manifest2 = new shaka.test.ManifestGenerator()
+          .addPeriod(0)
+            .addVariant(0).bandwidth(500)
+              .addVideo(0).mime('video/mp4', 'bad')
+          .build();
+      /* eslint-enable indent */
+      manifest.periods.push(manifest2.periods[0]);
+
+      const expected = Util.jasmineError(new shaka.util.Error(
+          shaka.util.Error.Severity.CRITICAL,
+          shaka.util.Error.Category.MANIFEST,
+          shaka.util.Error.Code.UNPLAYABLE_PERIOD));
+      const test =
+          () => parser.playerInterface.filterNewPeriod(manifest2.periods[0]);
+      expect(test).toThrow(expected);
     });
   });
 

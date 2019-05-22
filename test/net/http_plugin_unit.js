@@ -32,7 +32,8 @@ function httpPluginTests(usingFetch) {
   let plugin;
 
   beforeAll(() => {
-    plugin = usingFetch ? shaka.net.HttpFetchPlugin : shaka.net.HttpXHRPlugin;
+    plugin = usingFetch ? shaka.net.HttpFetchPlugin.parse :
+                          shaka.net.HttpXHRPlugin.parse;
     PromiseMock.install();
 
     if (usingFetch) {
@@ -76,7 +77,9 @@ function httpPluginTests(usingFetch) {
                 try {
                   callback(event);
                 } catch (error) {
-                  fail('Uncaught error in XMLHttpRequest#' + eventHandlerName);
+                  fail(
+                      'Uncaught error in XMLHttpRequest#' + eventHandlerName +
+                      ', ' + error.message);
                 }
               };
             },

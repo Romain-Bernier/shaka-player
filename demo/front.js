@@ -93,7 +93,7 @@ class ShakaDemoFront {
     hideButton.classList.add('mdl-js-ripple-effect');
     hideButton.textContent = 'Dismiss'; // TODO: localize
     hideButton.addEventListener('click', () => {
-      shaka.ui.Utils.removeAllChildren(this.messageDiv_);
+      shaka.util.Dom.removeAllChildren(this.messageDiv_);
       window.localStorage.setItem(hideName, 'true');
     });
     this.messageDiv_.appendChild(hideButton);
@@ -101,7 +101,7 @@ class ShakaDemoFront {
 
   /** @private */
   remakeAssetCards_() {
-    shaka.ui.Utils.removeAllChildren(this.assetCardDiv_);
+    shaka.util.Dom.removeAllChildren(this.assetCardDiv_);
 
     const assets = shakaAssets.testAssets.filter((asset) => {
       return asset.isFeatured && !asset.disabled;
@@ -109,6 +109,8 @@ class ShakaDemoFront {
     this.assetCards_ = assets.map((asset) => {
       return this.createAssetCardFor_(asset, this.assetCardDiv_);
     });
+
+    this.updateSelected_();
   }
 
   /**

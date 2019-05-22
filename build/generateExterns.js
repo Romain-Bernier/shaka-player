@@ -42,6 +42,11 @@
  */
 
 // Load required modules.
+let assert = require('assert');
+if (assert.strict) {
+  // The "strict" mode was added in v9.9, use that if available.
+  assert = assert.strict;
+}
 const esprima = require('esprima');
 const fs = require('fs');
 
@@ -83,7 +88,7 @@ function topologicalSort(list, getDeps) {
    */
   function visit(object) {
     if (object.__mark == MID_VISIT) {
-      console.assert(false, 'Dependency cycle detected!');
+      assert.fail('Dependency cycle detected!');
     } else if (object.__mark == NOT_VISITED) {
       object.__mark = MID_VISIT;
 
@@ -203,7 +208,7 @@ function getArgumentFromCallNode(idx, node) {
   //   type: 'ExpressionStatement',
   //   expression: { type: 'CallExpression', callee: {...}, arguments: [...] },
   // }
-  console.assert(isCallNode(node));
+  assert(isCallNode(node));
   return node.expression.arguments[idx].value;
 }
 
@@ -220,7 +225,7 @@ function getIdentifierString(node) {
     return node.name;
   }
 
-  console.assert(node.type == 'MemberExpression');
+  assert.equal(node.type, 'MemberExpression');
   // Example code: foo.bar.baz
   // Example node: {
   //   type: 'MemberExpression',
@@ -242,7 +247,8 @@ function getIdentifierString(node) {
  * @return {!Array.<string>} a list of the parameter names.
  */
 function getFunctionParameters(node) {
-  console.assert(node.type == 'FunctionExpression');
+  assert(node.type == 'FunctionExpression' ||
+         node.type == 'ArrowFunctionExpression');
   // Example code: function(x, y, z = null, ...varArgs) {...}
   // Example node: {
   //   params: [
@@ -261,17 +267,13 @@ function getFunctionParameters(node) {
   //   body: {...},
   // }
   return node.params.map((param) => {
-    console.assert(param.type == 'Identifier' ||
-                   param.type == 'AssignmentPattern' ||
-                   param.type == 'RestElement');
     if (param.type == 'Identifier') {
       return param.name;
     } else if (param.type == 'AssignmentPattern') {
       return param.left.name;
-    } else if (param.type == 'RestElement') {
-      return '...' + param.argument.name;
     } else {
-      throw new Error('Unexpected parameter type: ' + param.type);
+      assert.equal(param.type, 'RestElement');
+      return '...' + param.argument.name;
     }
   });
 }
@@ -303,7 +305,7 @@ function removeExportAnnotationsFromComment(comment) {
  * @return {!Array.<ASTNode>}
  */
 function getAllExpressionStatements(node) {
-  console.assert(node.body && node.body.body);
+  assert(node.body && node.body.body);
   const expressionStatements = [];
   for (const childNode of node.body.body) {
     if (childNode.type == 'ExpressionStatement') {
@@ -323,8 +325,7 @@ function getAllExpressionStatements(node) {
  * @return {string} An extern string for this node.
  */
 function createExternFromExportNode(names, node) {
-  console.assert(node.type == 'ExpressionStatement',
-      'Unknown node type: ' + node.type);
+  assert.equal(node.type, 'ExpressionStatement', 'Unknown node type');
 
   let comment = getLeadingBlockComment(node);
   comment = removeExportAnnotationsFromComment(comment);
@@ -360,8 +361,7 @@ function createExternFromExportNode(names, node) {
       break;
 
     default:
-      console.assert(
-          false, 'Unexpected expression type: ' + node.expression.type);
+      assert.fail('Unexpected expression type: ' + node.expression.type);
   }
 
   // Keep track of the names we've externed.
@@ -371,9 +371,18 @@ function createExternFromExportNode(names, node) {
 
   // Find this.foo = bar in the constructor, and potentially generate externs
   // for that, too.
-  if (node.expression.type == 'AssignmentExpression' &&
-      comment.includes('@constructor')) {
-    externString += createExternsFromConstructor(name, node.expression.right);
+  if (node.expression.type == 'AssignmentExpression') {
+    const rightSide = node.expression.right;
+
+    if (rightSide.type == 'FunctionExpression' &&
+        comment.includes('@constructor')) {
+      externString += createExternsFromConstructor(name, rightSide);
+    } else if (rightSide.type == 'ClassExpression') {
+      const ctor = getClassConstructor(node.expression.right);
+      if (ctor) {
+        externString += createExternsFromConstructor(name, ctor);
+      }
+    }
   }
   return externString;
 }
@@ -393,18 +402,63 @@ function createExternMethod(node) {
   //   key: Identifier,
   //   value: FunctionExpression,
   // }
+  const id = getIdentifierString(node.key);
   let comment = getLeadingBlockComment(node);
+  if (!comment) {
+    if (id == 'constructor') {
+      // ES6 constructors don't necessarily need comments; a comment along the
+      // lines of "Creates a Foo object." doesn't really add anything.
+      comment = '';
+    } else {
+      throw new Error('No leading block comment for: ' + id);
+    }
+  }
   comment = removeExportAnnotationsFromComment(comment);
 
   const params = getFunctionParameters(node.value);
-  const id = getIdentifierString(node.key);
 
-  let methodString = '  ' + comment + '\n  ';
+  let methodString = (comment ? '  ' + comment + '\n' : '') + '  ';
   if (node.static) {
     methodString += 'static ';
   }
   methodString += id + '(' + params + ') {}';
   return methodString;
+}
+
+
+/**
+ * Find the constructor of an ES6 class, if it exists.
+ *
+ * @param {ASTNode} className
+ * @return {ASTNode}
+ */
+function getClassConstructor(classNode) {
+  // Example class node: {
+  //   type: 'ClassExpression',
+  //   body: {
+  //     type: 'ClassBody',
+  //     body: [ MethodDefinition, ... ],
+  //   }
+  // }
+  //
+  // Example method node: {
+  //   type: 'MethodDefinition',
+  //   key: { type: 'Identifier', name: 'constructor' },
+  //   value: {
+  //     type: 'FunctionExpression',
+  //     params: [ [Identifier], [Identifier], [Identifier] ],
+  //     body: { type: 'BlockStatement', body: [Array] },
+  // }
+
+  assert.equal(classNode.type, 'ClassExpression');
+
+  for (const member of classNode.body.body) {
+    if (member.type == 'MethodDefinition' && member.key.name == 'constructor') {
+      return member.value;
+    }
+  }
+
+  return null;
 }
 
 
@@ -438,7 +492,8 @@ function createExternAssignment(name, node) {
           continue;
         }
 
-        console.assert(member.type == 'MethodDefinition',
+        assert.equal(
+            member.type, 'MethodDefinition',
             'Unexpected exported member type in exported class!');
 
         classString += createExternMethod(member) + '\n';
@@ -447,6 +502,7 @@ function createExternAssignment(name, node) {
       return classString;
     }
 
+    case 'ArrowFunctionExpression':
     case 'FunctionExpression': {
       // Example code: foo.square = function(x) { return x * x; };
       // Example node: { params: [ { type: 'Identifier', name: 'x' } ] }
@@ -468,14 +524,13 @@ function createExternAssignment(name, node) {
       //   } ]
       // }
       const propertyStrings = node.properties.map((prop) => {
-        console.assert(prop.kind == 'init');
-        console.assert(
-            prop.key.type == 'Literal' || prop.key.type == 'Identifier');
+        assert.equal(prop.kind, 'init');
+        assert(prop.key.type == 'Literal' || prop.key.type == 'Identifier');
         // Literal indicates a quoted name in the source, while Identifier is
         // an unquoted name.  In the case of Literal, key.raw gets us the
         // unquoted name, we end up with an unquoted name in both cases.
         const name = prop.key.type == 'Literal' ? prop.key.raw : prop.key.name;
-        console.assert(prop.value.type == 'Literal');
+        assert.equal(prop.value.type, 'Literal');
         return '  ' + name + ': ' + prop.value.raw;
       });
       return ' = {\n' + propertyStrings.join(',\n') + '\n}';
@@ -492,7 +547,8 @@ function createExternAssignment(name, node) {
       return '';
 
     default:
-      throw new Error('Unexpected export type: ' + node.type);
+      assert.fail('Unexpected export type: ' + node.type);
+      return '';  // Shouldn't be hit, but linter wants a return statement.
   }
 }
 
@@ -515,19 +571,23 @@ function createExternsFromConstructor(className, constructorNode) {
   // /** @exportInterface @type {number} */
   // FooLike.prototype.bar;
   //
-  // /** @constructor @export @implements {FooLike} */
-  // Foo = function() {
-  //   /** @override @exportInterface */
-  //   this.bar = 10;
+  // /** @export @implements {FooLike} */
+  // class Foo {
+  //   constructor() {
+  //     /** @override @exportInterface */
+  //     this.bar = 10;
+  //   }
   // };
   //
   // Example externs:
   //
   // /**
   //  * Generated by createExternFromExportNode:
-  //  * @constructor @implements {FooLike}
+  //  * @implements {FooLike}
   //  */
-  // Foo = function() {}
+  // class Foo {
+  //   constructor() {}
+  // }
   //
   // /**
   //  * Generated by createExternsFromConstructor:
@@ -549,8 +609,8 @@ function createExternsFromConstructor(className, constructorNode) {
       continue;
     }
 
-    console.assert(left);
-    console.assert(right);
+    assert(left);
+    assert(right);
 
     // Skip anything that isn't exported.
     let comment = getLeadingBlockComment(statement);
@@ -560,7 +620,7 @@ function createExternsFromConstructor(className, constructorNode) {
 
     comment = removeExportAnnotationsFromComment(comment);
 
-    console.assert(left.property.type == 'Identifier');
+    assert.equal(left.property.type, 'Identifier');
     const name = className + '.prototype.' + left.property.name;
     externString += comment + '\n' + name + ';\n';
   }
@@ -583,7 +643,7 @@ function generateExterns(names, inputPath) {
   // Load and parse the code, with comments attached to the nodes.
   const code = fs.readFileSync(inputPath, 'utf-8');
   const program = esprima.parse(code, {attachComment: true});
-  console.assert(program.type == 'Program');
+  assert.equal(program.type, 'Program');
 
   const body = program.body;
   const provides = program.body.filter(isProvideNode)
@@ -623,10 +683,8 @@ function main(args) {
       inputPaths.push(args[i]);
     }
   }
-  console.assert(outputPath,
-      'You must specify output file with --output <EXTERNS>');
-  console.assert(inputPaths.length,
-      'You must specify at least one input file.');
+  assert(outputPath, 'You must specify output file with --output <EXTERNS>');
+  assert(inputPaths.length, 'You must specify at least one input file.');
 
   // Generate externs for all input paths.
   const names = new Set();
@@ -636,7 +694,7 @@ function main(args) {
   const sorted = topologicalSort(results, /* getDeps */ (object) => {
     return object.requires.map((id) => {
       const dep = results.find((x) => x.provides.includes(id));
-      console.assert(dep, 'Cannot find dependency: ' + id);
+      assert(dep, 'Cannot find dependency: ' + id);
       return dep;
     });
   });
