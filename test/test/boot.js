@@ -109,7 +109,7 @@ function getClientArg(name) {
   if (logLevel) {
     shaka.log.setLevel(Number(logLevel));
   } else {
-    shaka.log.setLevel(shaka.log.Level.VeryVerbose); // default level 
+    shaka.log.setLevel(shaka.log.Level.INFO); // default level 
   }
 
   // Set random and seed if specified.
