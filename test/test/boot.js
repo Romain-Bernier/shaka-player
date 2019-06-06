@@ -32,7 +32,7 @@ function getClientArg(name) {
 
 // Executed before test utilities and tests are loaded, but after Shaka Player
 // is loaded in uncompiled mode.
-(function() {
+(() => {
   const realAssert = console.assert.bind(console);
 
   /**
@@ -133,7 +133,7 @@ function getClientArg(name) {
    * @return {jasmine.Callback}
    */
   function filterShim(callback, clientArg, skipMessage) {
-    return async function() {
+    return async () => {
       if (!getClientArg(clientArg)) {
         pending(skipMessage);
         return;
@@ -156,7 +156,7 @@ function getClientArg(name) {
    * @param {string} name
    * @param {jasmine.Callback} callback
    */
-  window.drmIt = function(name, callback) {
+  window.drmIt = (name, callback) => {
     it(name, filterShim(callback, 'drm',
         'Skipping tests that use a DRM license server.'));
   };
@@ -167,7 +167,7 @@ function getClientArg(name) {
    * @param {string} name
    * @param {jasmine.Callback} callback
    */
-  window.quarantinedIt = function(name, callback) {
+  window.quarantinedIt = (name, callback) => {
     it(name, filterShim(callback, 'quarantined',
         'Skipping tests that are quarantined.'));
   };
@@ -199,9 +199,12 @@ function getClientArg(name) {
     // Load required AMD modules, then proceed with tests.
     require(['promise-mock', 'sprintf-js', 'less'],
         (PromiseMock, sprintfJs, less) => {
-          window.PromiseMock = PromiseMock;
-          window.sprintf = sprintfJs.sprintf;
-          window.less = less;
+          // These external interfaces are declared as "const" in the externs.
+          // Avoid "const"-ness complaints from the compiler by assigning these
+          // using bracket notation.
+          window['PromiseMock'] = PromiseMock;
+          window['sprintf'] = sprintfJs.sprintf;
+          window['less'] = less;
 
           // Patch a new convenience method into PromiseMock.
           // See https://github.com/taylorhakes/promise-mock/issues/7
@@ -231,4 +234,14 @@ function getClientArg(name) {
       originalSetTimeout(done, 100 /* ms */);
     });
   }
+
+  // Code in karma-jasmine's adapter will malform test failures when the
+  // expectation message contains a stack trace, losing the failure message and
+  // mixing up the stack trace of the failure.  To avoid this, we modify
+  // shaka.util.Error not to create a stack trace.  This trace is not available
+  // in production, and there is never any need for it in the tests.
+  // Shimming shaka.util.Error proved too complicated because of a combination
+  // of compiler restrictions and ES6 language features, so this is by far the
+  // simpler answer.
+  shaka.util.Error.createStack = false;
 })();
