@@ -780,8 +780,9 @@ class ShakaDemoMain {
     if (arguments.length == 2 && typeof(config) == 'string') {
       config = shaka.util.ConfigUtils.convertToConfigObject(config, value);
     }
+    const asObj = /** @type {!Object} */ (config);
     shaka.util.PlayerConfiguration.mergeConfigObjects(
-        this.desiredConfig_, config, this.defaultConfig_);
+        this.desiredConfig_, asObj, this.defaultConfig_);
     this.player_.configure(config, value);
   }
 
@@ -919,6 +920,7 @@ class ShakaDemoMain {
       // Make an alias for "this" so that it can be captured inside the
       // non-arrow function below.
       const self = this;
+      // eslint-disable-next-line no-restricted-syntax
       const textDisplayer = function() {
         if (self.nativeControlsEnabled_) {
           return new shaka.text.SimpleTextDisplayer(self.video_);

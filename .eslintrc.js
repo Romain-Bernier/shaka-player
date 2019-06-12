@@ -18,6 +18,37 @@
 
 // ESlint config
 
+// This is a matcher (usable in no-restricted-syntax) that matches either a
+// test or a before/after block.
+const testNameRegex =
+    '/^([fx]?it|(drm|quarantined)It|(before|after)(Each|All))$/';
+const testCall = `CallExpression[callee.name=${testNameRegex}]`;
+
+const commonNoRestrictedSyntax = [
+  {
+    'selector':
+        'MemberExpression[object.name="goog"][property.name="inherits"]',
+    'message': 'Don\'t use goog.inherits.',
+  },
+  {
+    'selector': ':not(MethodDefinition) > FunctionExpression',
+    'message': 'Use arrow functions instead of "function" functions.',
+  },
+  {
+    'selector': 'CallExpression[callee.property.name="forEach"] >' +
+                ':function[params.length=1]',
+    'message': 'Use for-of instead of forEach',
+  },
+  {
+    'selector': 'CallExpression[callee.property.name=/^(bind|call|apply)$/]',
+    'message': 'Don\'t use Function bind/call/apply.',
+  },
+  {
+    'selector': 'MemberExpression[property.name="prototype"]',
+    'message': 'Use ES6 classes not .prototype.',
+  },
+];
+
 module.exports = {
   'env': {
     'browser': true,
@@ -129,6 +160,7 @@ module.exports = {
     'array-bracket-newline': ['error', 'consistent'],
     'block-spacing': ['error', 'always'],
     'brace-style': ['error', '1tbs', {'allowSingleLine': true}],
+    'id-blacklist': ['error', 'async'],
     'lines-between-class-members': 'error',
     'max-statements-per-line': ['error', {'max': 1}],
     'new-parens': 'error',
@@ -140,19 +172,7 @@ module.exports = {
     ],
     'no-restricted-syntax': [
       'error',
-      {
-        'selector': 'CallExpression[callee.name="beforeAll"] ' +
-                    ':matches(' +
-                    'CallExpression[callee.property.name="createSpy"],' +
-                    'CallExpression[callee.name="spyOn"])',
-        'message': 'Create spies in beforeEach, not beforeAll.',
-      },
-      {
-        'selector': 'CallExpression' +
-                    '[callee.name=/^([fx]?it|(before|after)(Each|All))$/] > ' +
-                    ':function[async=true][params.length>0]',
-        'message': 'Don\'t use both async and done.',
-      },
+      ...commonNoRestrictedSyntax,
     ],
     'no-whitespace-before-property': 'error',
     'nonblock-statement-body-position': ['error', 'below'],
@@ -167,6 +187,47 @@ module.exports = {
     // }}}
   },
   'overrides': [
+    {
+      'rules': {
+        'no-restricted-syntax': [
+          'error',
+          {
+            'selector': 'CallExpression[callee.name="beforeAll"] ' +
+                        ':matches(' +
+                        'CallExpression[callee.property.name="createSpy"],' +
+                        'CallExpression[callee.name="spyOn"])',
+            'message': 'Create spies in beforeEach, not beforeAll.',
+          },
+          {
+            'selector': testCall + ' > :function[params.length>0]',
+            'message': 'Use async instead of "done" in tests.',
+          },
+          {
+            'selector': testCall + ' > CallExpression',
+            'message': 'Use filterDescribe instead of checkAndRun calls',
+          },
+          {
+            'selector': 'CatchClause',
+            'message': 'Use expect.toFail or expectAsync.toBeRejected',
+          },
+          ...commonNoRestrictedSyntax,
+        ],
+      },
+      'files': [
+        'test/**/*.js',
+      ],
+    },
+    {
+      'rules': {
+        'no-restricted-syntax': 'off',
+      },
+      'files': [
+        'demo/load.js',
+        'externs/**/*.js',
+        'test/test/externs/*.js',
+        'ui/externs/*.js',
+      ],
+    },
     {
       'rules': {
         'no-var': 'off',
@@ -196,6 +257,14 @@ module.exports = {
         'demo/log_section.js',
         'lib/debug/asserts.js',
       ],
+    },
+    {
+      'files': ['externs/*', 'externs/shaka/*'],
+      'rules': {
+        // Disable rules on useless constructors so we can use ES6 classes in
+        // externs.
+        'no-useless-constructor': 'off',
+      },
     },
   ],
 };

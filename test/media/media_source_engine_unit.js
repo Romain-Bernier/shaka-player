@@ -51,6 +51,7 @@ describe('MediaSourceEngine', () => {
   const originalIsTypeSupported = window.MediaSource.isTypeSupported;
   const originalTextEngine = shaka.text.TextEngine;
   const originalCreateMediaSource =
+      // eslint-disable-next-line no-restricted-syntax
       shaka.media.MediaSourceEngine.prototype.createMediaSource;
   const originalTransmuxerIsSupported = shaka.media.Transmuxer.isSupported;
 
@@ -119,6 +120,7 @@ describe('MediaSourceEngine', () => {
       p.resolve();
       return mockMediaSource;
     });
+    // eslint-disable-next-line no-restricted-syntax
     shaka.media.MediaSourceEngine.prototype.createMediaSource =
         Util.spyFunc(createMediaSourceSpy);
 
@@ -157,6 +159,7 @@ describe('MediaSourceEngine', () => {
   afterEach(() => {
     mockTextEngine = null;
     shaka.text.TextEngine = originalTextEngine;
+    // eslint-disable-next-line no-restricted-syntax
     shaka.media.MediaSourceEngine.prototype.createMediaSource =
         originalCreateMediaSource;
   });
@@ -341,10 +344,8 @@ describe('MediaSourceEngine', () => {
     });
 
     it('appends the given data', async () => {
-      /** @type {!shaka.test.StatusPromise} */
-      const p = new shaka.test.StatusPromise(mediaSourceEngine.appendBuffer(
-          ContentType.AUDIO, buffer, null, null,
-          /* hasClosedCaptions */ false));
+      const p = mediaSourceEngine.appendBuffer(
+          ContentType.AUDIO, buffer, null, null, /* hasClosedCaptions */ false);
       expect(audioSourceBuffer.appendBuffer).toHaveBeenCalledWith(buffer);
       audioSourceBuffer.updateend();
       await p;
@@ -469,26 +470,21 @@ describe('MediaSourceEngine', () => {
         }
       });
 
-      /** @type {!shaka.test.StatusPromise} */
-      const p1 = new shaka.test.StatusPromise(mediaSourceEngine.appendBuffer(
-          ContentType.AUDIO, buffer, null, null,
-          /* hasClosedCaptions */ false));
-      /** @type {!shaka.test.StatusPromise} */
-      const p2 = new shaka.test.StatusPromise(mediaSourceEngine.appendBuffer(
+      const p1 = mediaSourceEngine.appendBuffer(
+          ContentType.AUDIO, buffer, null, null, /* hasClosedCaptions */ false);
+      const p2 = mediaSourceEngine.appendBuffer(
           ContentType.AUDIO, buffer2, null, null,
-          /* hasClosedCaptions */ false));
-      /** @type {!shaka.test.StatusPromise} */
-      const p3 = new shaka.test.StatusPromise(mediaSourceEngine.appendBuffer(
+          /* hasClosedCaptions */ false);
+      const p3 = mediaSourceEngine.appendBuffer(
           ContentType.AUDIO, buffer3, null, null,
-          /* hasClosedCaptions */ false));
+          /* hasClosedCaptions */ false);
 
-      await Util.delay(0.1);
+      await expectAsync(p1).toBeResolved();
+      await expectAsync(p2).toBeRejected();
+      await expectAsync(p3).toBeResolved();
       expect(audioSourceBuffer.appendBuffer).toHaveBeenCalledWith(buffer);
       expect(audioSourceBuffer.appendBuffer).toHaveBeenCalledWith(buffer2);
       expect(audioSourceBuffer.appendBuffer).toHaveBeenCalledWith(buffer3);
-      expect(p1.status).toBe('resolved');
-      expect(p2.status).toBe('rejected');
-      expect(p3.status).toBe('resolved');
     });
 
     it('forwards to TextEngine', async () => {
@@ -720,23 +716,16 @@ describe('MediaSourceEngine', () => {
         }
       });
 
-      /** @type {!shaka.test.StatusPromise} */
-      const p1 = new shaka.test.StatusPromise(
-          mediaSourceEngine.remove(ContentType.AUDIO, 1, 2));
-      /** @type {!shaka.test.StatusPromise} */
-      const p2 = new shaka.test.StatusPromise(
-          mediaSourceEngine.remove(ContentType.AUDIO, 2, 3));
-      /** @type {!shaka.test.StatusPromise} */
-      const p3 = new shaka.test.StatusPromise(
-          mediaSourceEngine.remove(ContentType.AUDIO, 3, 4));
+      const p1 = mediaSourceEngine.remove(ContentType.AUDIO, 1, 2);
+      const p2 = mediaSourceEngine.remove(ContentType.AUDIO, 2, 3);
+      const p3 = mediaSourceEngine.remove(ContentType.AUDIO, 3, 4);
 
-      await Util.delay(0.1);
+      await expectAsync(p1).toBeResolved();
+      await expectAsync(p2).toBeRejected();
+      await expectAsync(p3).toBeResolved();
       expect(audioSourceBuffer.remove).toHaveBeenCalledWith(1, 2);
       expect(audioSourceBuffer.remove).toHaveBeenCalledWith(2, 3);
       expect(audioSourceBuffer.remove).toHaveBeenCalledWith(3, 4);
-      expect(p1.status).toBe('resolved');
-      expect(p2.status).toBe('rejected');
-      expect(p3.status).toBe('resolved');
     });
 
     it('will forward to TextEngine', async () => {
@@ -1014,104 +1003,88 @@ describe('MediaSourceEngine', () => {
           /* hasClosedCaptions */ false);
 
       /** @type {!shaka.test.StatusPromise} */
-      const p = new shaka.test.StatusPromise(mediaSourceEngine.destroy());
+      const d = new shaka.test.StatusPromise(mediaSourceEngine.destroy());
 
-      expect(p.status).toBe('pending');
+      expect(d.status).toBe('pending');
       await Util.delay(0.1);
-      expect(p.status).toBe('pending');
+      expect(d.status).toBe('pending');
       audioSourceBuffer.updateend();
       await Util.delay(0.1);
-      expect(p.status).toBe('pending');
+      expect(d.status).toBe('pending');
       videoSourceBuffer.updateend();
-      await Util.delay(0.1);
-      expect(p.status).toBe('resolved');
+      await d;
     });
 
     it('resolves even when a pending operation fails', async () => {
-      /** @type {!shaka.test.StatusPromise} */
-      const p1 = new shaka.test.StatusPromise(mediaSourceEngine.appendBuffer(
-          ContentType.AUDIO, buffer, null, null,
-          /* hasClosedCaptions */ false));
-      /** @type {!shaka.test.StatusPromise} */
-      const p2 = new shaka.test.StatusPromise(mediaSourceEngine.destroy());
+      const p = mediaSourceEngine.appendBuffer(
+          ContentType.AUDIO, buffer, null, null, /* hasClosedCaptions */ false);
+      const d = mediaSourceEngine.destroy();
 
       audioSourceBuffer.error();
       audioSourceBuffer.updateend();
-      await Util.delay(0.1);
-      expect(p1.status).toBe('rejected');
-      expect(p2.status).toBe('resolved');
+      await expectAsync(p).toBeRejected();
+      await d;
     });
 
     it('waits for blocking operations to complete', async () => {
       /** @type {!shaka.test.StatusPromise} */
-      const p1 = new shaka.test.StatusPromise(mediaSourceEngine.endOfStream());
+      const p = new shaka.test.StatusPromise(mediaSourceEngine.endOfStream());
       /** @type {!shaka.test.StatusPromise} */
-      const p2 = new shaka.test.StatusPromise(mediaSourceEngine.destroy());
+      const d = new shaka.test.StatusPromise(mediaSourceEngine.destroy());
 
-      expect(p1.status).toBe('pending');
-      expect(p2.status).toBe('pending');
-      await p1;
-      expect(p2.status).toBe('pending');
-      await Util.delay(0.1);
-      expect(p2.status).toBe('resolved');
+      expect(p.status).toBe('pending');
+      expect(d.status).toBe('pending');
+      await p;
+      expect(d.status).toBe('pending');
+      await d;
     });
 
     it('cancels operations that have not yet started', async () => {
       mediaSourceEngine.appendBuffer(
           ContentType.AUDIO, buffer, null, null, /* hasClosedCaptions */ false);
-      /** @type {!shaka.test.StatusPromise} */
-      const rejected =
-          new shaka.test.StatusPromise(mediaSourceEngine.appendBuffer(
-              ContentType.AUDIO, buffer2, null, null,
-              /* hasClosedCaptions */ false));
+      const rejected = mediaSourceEngine.appendBuffer(
+          ContentType.AUDIO, buffer2, null, null,
+          /* hasClosedCaptions */ false);
+      // Create the expectation first so we don't get unhandled rejection errors
+      const expected = expectAsync(rejected).toBeRejected();
 
       expect(audioSourceBuffer.appendBuffer).toHaveBeenCalledWith(buffer);
       expect(audioSourceBuffer.appendBuffer).not.toHaveBeenCalledWith(buffer2);
 
       /** @type {!shaka.test.StatusPromise} */
-      const p = new shaka.test.StatusPromise(mediaSourceEngine.destroy());
+      const d = new shaka.test.StatusPromise(mediaSourceEngine.destroy());
 
-      expect(p.status).toBe('pending');
+      expect(d.status).toBe('pending');
       await Util.delay(0.1);
-      expect(p.status).toBe('pending');
-      expect(rejected.status).toBe('rejected');
+      expect(d.status).toBe('pending');
+      await expected;
       expect(audioSourceBuffer.appendBuffer).toHaveBeenCalledWith(buffer);
       expect(audioSourceBuffer.appendBuffer).not.toHaveBeenCalledWith(buffer2);
       audioSourceBuffer.updateend();
-      await Util.delay(0.1);
-      expect(p.status).toBe('resolved');
+      await d;
       expect(audioSourceBuffer.appendBuffer).not.toHaveBeenCalledWith(buffer2);
     });
 
     it('cancels blocking operations that have not yet started', async () => {
-      /** @type {!shaka.test.StatusPromise} */
-      const p1 = new shaka.test.StatusPromise(mediaSourceEngine.appendBuffer(
-          ContentType.AUDIO, buffer, null, null,
-          /* hasClosedCaptions */ false));
-      /** @type {!shaka.test.StatusPromise} */
-      const p2 = new shaka.test.StatusPromise(mediaSourceEngine.endOfStream());
-      /** @type {!shaka.test.StatusPromise} */
-      const p3 = new shaka.test.StatusPromise(mediaSourceEngine.destroy());
+      const p1 = mediaSourceEngine.appendBuffer(
+          ContentType.AUDIO, buffer, null, null, /* hasClosedCaptions */ false);
+      const p2 = mediaSourceEngine.endOfStream();
+      const d = mediaSourceEngine.destroy();
 
-      expect(p1.status).toBe('pending');
-      expect(p2.status).toBe('pending');
-      expect(p3.status).toBe('pending');
       audioSourceBuffer.updateend();
-      await Util.delay(0.1);
-      expect(p1.status).toBe('resolved');
-      expect(p2.status).toBe('rejected');
-      await Util.delay(0.1);
-      expect(p3.status).toBe('resolved');
+      await expectAsync(p1).toBeResolved();
+      await expectAsync(p2).toBeRejected();
+      await d;
     });
 
     it('prevents new operations from being added', async () => {
-      const p = mediaSourceEngine.destroy();
+      const d = mediaSourceEngine.destroy();
       await expectAsync(
           mediaSourceEngine.appendBuffer(
               ContentType.AUDIO, buffer, null, null,
               /* hasClosedCaptions */ false))
           .toBeRejected();
-      await p;
+      await d;
       expect(audioSourceBuffer.appendBuffer).not.toHaveBeenCalled();
     });
 
