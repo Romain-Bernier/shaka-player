@@ -180,7 +180,7 @@ describe('Player', () => {
 
       mediaSourceEngine.destroy.and.callFake(async () => {
         expect(drmEngine.destroy).not.toHaveBeenCalled();
-        await Util.delay(0.01);
+        await Util.shortDelay();
         expect(drmEngine.destroy).not.toHaveBeenCalled();
       });
 
@@ -194,7 +194,7 @@ describe('Player', () => {
     // TODO(vaage): Re-enable once the parser is integrated into the load graph
     //              better.
     xit('destroys parser first when interrupting load', async () => {
-      const p = shaka.test.Util.delay(0.3);
+      const p = shaka.test.Util.shortDelay();
       /** @type {!shaka.test.FakeManifestParser} */
       const parser = new shaka.test.FakeManifestParser(manifest);
       parser.start.and.returnValue(p);
@@ -205,7 +205,7 @@ describe('Player', () => {
       const factory = () => parser;
 
       const load = player.load(fakeManifestUri, 0, factory);
-      await shaka.test.Util.delay(0.1);
+      await shaka.test.Util.shortDelay();
       await player.destroy();
       expect(abrManager.stop).toHaveBeenCalled();
       expect(networkingEngine.destroy).toHaveBeenCalled();
@@ -313,30 +313,30 @@ describe('Player', () => {
 
       it('load text stream if caption is visible', async () => {
         await player.load(fakeManifestUri, 0, returnManifest(manifest));
-        player.setTextTrackVisibility(true);
+        await player.setTextTrackVisibility(true);
         expect(streamingEngine.loadNewTextStream).toHaveBeenCalled();
         expect(streamingEngine.getBufferingText()).not.toBe(null);
       });
 
       it('does not load text stream if caption is invisible', async () => {
         await player.load(fakeManifestUri, 0, returnManifest(manifest));
-        player.setTextTrackVisibility(false);
+        await player.setTextTrackVisibility(false);
         expect(streamingEngine.loadNewTextStream).not.toHaveBeenCalled();
         expect(streamingEngine.getBufferingText()).toBe(null);
       });
 
       it('loads text stream if alwaysStreamText is set', async () => {
-        player.setTextTrackVisibility(false);
+        await player.setTextTrackVisibility(false);
         player.configure({streaming: {alwaysStreamText: true}});
 
         await player.load(fakeManifestUri, 0, returnManifest(manifest));
         expect(streamingEngine.getBufferingText()).not.toBe(null);
 
-        player.setTextTrackVisibility(true);
+        await player.setTextTrackVisibility(true);
         expect(streamingEngine.loadNewTextStream).not.toHaveBeenCalled();
         expect(streamingEngine.unloadTextStream).not.toHaveBeenCalled();
 
-        player.setTextTrackVisibility(false);
+        await player.setTextTrackVisibility(false);
         expect(streamingEngine.loadNewTextStream).not.toHaveBeenCalled();
         expect(streamingEngine.unloadTextStream).not.toHaveBeenCalled();
       });
@@ -660,7 +660,7 @@ describe('Player', () => {
       player.configure({streaming: {bufferingGoal: 9001}});
 
       // Delay to ensure that the switch would have been called.
-      await shaka.test.Util.delay(0.1);
+      await shaka.test.Util.shortDelay();
 
       expect(switchVariantSpy).not.toHaveBeenCalled();
     });
@@ -1713,7 +1713,7 @@ describe('Player', () => {
       expect(player.isTextTrackVisible()).toBe(true);
 
       // Turn text back off.
-      player.setTextTrackVisibility(false);
+      await player.setTextTrackVisibility(false);
       expect(player.isTextTrackVisible()).toBe(false);
 
       // Change text languages after startup.
@@ -2872,8 +2872,8 @@ describe('Player', () => {
   });
 
   describe('setTextTrackVisibility', () => {
-    it('does not throw before load', () => {
-      player.setTextTrackVisibility(true);
+    it('does not throw before load', async () => {
+      await player.setTextTrackVisibility(true);
     });
   });
 
