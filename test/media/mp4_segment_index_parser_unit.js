@@ -38,14 +38,12 @@ describe('Mp4SegmentIndexParser', () => {
         shaka.util.Error.Severity.CRITICAL,
         shaka.util.Error.Category.MEDIA,
         shaka.util.Error.Code.MP4_SIDX_WRONG_BOX_TYPE));
-    // eslint-disable-next-line new-cap
     expect(() =>
       shaka.media.Mp4SegmentIndexParser.parse(mediaSegment, 0, [], 0))
         .toThrow(error);
   });
 
   it('parses index segment ', () => {
-    // eslint-disable-next-line new-cap
     const result =
         shaka.media.Mp4SegmentIndexParser.parse(indexSegment, 0, [], 0);
     const references =
@@ -57,19 +55,10 @@ describe('Mp4SegmentIndexParser', () => {
           {startTime: 48, endTime: 60, startByte: 615512, endByte: 743301},
         ];
 
-    expect(result).toBeTruthy();
-    expect(result.length).toBe(references.length);
-    for (let i = 0; i < result.length; i++) {
-      expect(result[i].position).toBe(i);
-      expect(result[i].startTime).toBe(references[i].startTime);
-      expect(result[i].endTime).toBe(references[i].endTime);
-      expect(result[i].startByte).toBe(references[i].startByte);
-      expect(result[i].endByte).toBe(references[i].endByte);
-    }
+    expect(result).toEqual(references.map((o) => jasmine.objectContaining(o)));
   });
 
   it('takes a scaled presentationTimeOffset in seconds', () => {
-    // eslint-disable-next-line new-cap
     const result =
         shaka.media.Mp4SegmentIndexParser.parse(indexSegment, 0, [], 2);
     const references =
@@ -81,12 +70,6 @@ describe('Mp4SegmentIndexParser', () => {
           {startTime: 46, endTime: 58},
         ];
 
-    expect(result).toBeTruthy();
-    expect(result.length).toBe(references.length);
-    for (let i = 0; i < result.length; i++) {
-      expect(result[i].position).toBe(i);
-      expect(result[i].startTime).toBe(references[i].startTime);
-      expect(result[i].endTime).toBe(references[i].endTime);
-    }
+    expect(result).toEqual(references.map((o) => jasmine.objectContaining(o)));
   });
 });

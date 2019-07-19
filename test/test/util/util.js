@@ -31,7 +31,7 @@ shaka.test.StatusPromise = class {
     /** @type {string} */
     this.status;
 
-    // TODO: investigate using PromiseMock for this when possible.
+    // TODO: investigate using expectAsync() for this when possible.
     p.status = 'pending';
     p.then(() => {
       p.status = 'resolved';
@@ -51,22 +51,22 @@ shaka.test.Util = class {
    * @param {number} duration The number of seconds of simulated time.
    * @param {function(number)=} onTick
    */
-  static fakeEventLoop(duration, onTick) {
-    expect(window.Promise).toBe(PromiseMock);
-
+  static async fakeEventLoop(duration, onTick) {
     // Run this synchronously:
-    for (let time = 0; time < duration; ++time) {
+    for (const time of shaka.util.Iterables.range(duration)) {
       // We shouldn't need more than 6 rounds.
-      for (let i = 0; i < 6; ++i) {
+      for (const _ of shaka.util.Iterables.range(6)) {
+        shaka.util.Functional.ignored(_);
         jasmine.clock().tick(0);
-        PromiseMock.flush();
+        await Promise.resolve();  // eslint-disable-line no-await-in-loop
       }
 
       if (onTick) {
-        onTick(time);
+        await onTick(time);  // eslint-disable-line no-await-in-loop
       }
       jasmine.clock().tick(1000);
-      PromiseMock.flush();
+      // eslint-disable-next-line no-await-in-loop
+      await Promise.resolve();
     }
   }
 
@@ -82,10 +82,6 @@ shaka.test.Util = class {
       const timeout = realSetTimeout || setTimeout;
       timeout(() => {
         resolve();
-        // Play nicely with PromiseMock by flushing automatically.
-        if (window.Promise == PromiseMock) {
-          PromiseMock.flush();
-        }
       }, seconds * 1000.0);
     }));
   }
@@ -104,8 +100,22 @@ shaka.test.Util = class {
   }
 
   /**
+   * Creates a custom matcher object that matches a number that is close to the
+   * given value.
+   * @param {number} val
+   * @return {!Object}
+   */
+  static closeTo(val) {
+    const E = 0.000001;
+    return {
+      asymmetricMatch: (other) => other >= val - E && other <= val + E,
+      jasmineToString: () => '<closeTo: ' + val + '>',
+    };
+  }
+
+  /**
    * @param {!shaka.util.Error} error
-   * @return {*}
+   * @return {!Object}
    */
   static jasmineError(error) {
     // NOTE: Safari will add extra properties to any thrown object, and some of
@@ -172,7 +182,7 @@ shaka.test.Util = class {
       if (actual.attributes.length != expected.attributes.length) {
         return prospectiveDiff + 'Different attribute list length.';
       }
-      for (let i = 0; i < actual.attributes.length; i++) {
+      for (const i of shaka.util.Iterables.range(actual.attributes.length)) {
         const aAttrib = actual.attributes[i].nodeName;
         const aAttribVal = actual.getAttribute(aAttrib);
         const eAttrib = expected.attributes[i].nodeName;
@@ -188,7 +198,7 @@ shaka.test.Util = class {
       if (actual.childNodes.length != expected.childNodes.length) {
         return prospectiveDiff + 'Different child node list length.';
       }
-      for (let i = 0; i < actual.childNodes.length; i++) {
+      for (const i of shaka.util.Iterables.range(actual.childNodes.length)) {
         const aNode = actual.childNodes[i];
         const eNode = expected.childNodes[i];
         const diff =
@@ -376,6 +386,21 @@ shaka.test.Util = class {
   static waitForEndOrTimeout(eventManager, target, timeout) {
     const waiter = new shaka.test.Waiter(eventManager).timeoutAfter(timeout);
     return waiter.waitForEnd(target);
+  }
+
+  /**
+   * Returns a function that can be used as a factory.  This factory returns
+   * the given static value.
+   *
+   * @param {T} value
+   * @return {function():T}
+   * @template T
+   */
+  static factoryReturns(value) {
+    // eslint-disable-next-line no-restricted-syntax
+    return function() {
+      return value;
+    };
   }
 };
 

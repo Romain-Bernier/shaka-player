@@ -427,13 +427,8 @@ describe('MpdUtils', () => {
 
       const timeline = MpdUtils.createTimeline(
           segmentTimeline, timescale, presentationTimeOffset, periodDuration);
-
-      expect(timeline).toBeTruthy();
-      expect(timeline.length).toBe(expected.length);
-      for (let i = 0; i < expected.length; i++) {
-        expect(timeline[i].start).toBe(expected[i].start);
-        expect(timeline[i].end).toBe(expected[i].end);
-      }
+      expect(timeline).toEqual(
+          expected.map((c) => jasmine.objectContaining(c)));
     }
   });
 
@@ -527,10 +522,10 @@ describe('MpdUtils', () => {
 
     it('fails if it recurses too many times', async () => {
       const baseXMLString = inBaseContainer(
-          '<ToReplace xlink:href="https://xlink1" xlink:actuate="onLoad" />');
+          '<ToReplace xlink:href="https://xlink0" xlink:actuate="onLoad" />');
       // Create a large but finite number of links, so this won't
       // infinitely recurse if there isn't a depth limit.
-      for (let i = 1; i < 20; i++) {
+      for (const i of shaka.util.Iterables.range(20)) {
         const key = 'https://xlink' + i;
         const value = makeRecursiveXMLString(0, 'https://xlink' + (i + 1));
 
@@ -650,10 +645,10 @@ describe('MpdUtils', () => {
 
     it('interrupts requests on abort', async () => {
       const baseXMLString = inBaseContainer(
-          '<ToReplace xlink:href="https://xlink1" xlink:actuate="onLoad" />');
+          '<ToReplace xlink:href="https://xlink0" xlink:actuate="onLoad" />');
       // Create a few links.  This is few enough that it would succeed if we
       // didn't abort it.
-      for (let i = 1; i < 3; i++) {
+      for (const i of shaka.util.Iterables.range(4)) {
         const key = 'https://xlink' + i;
         const value = makeRecursiveXMLString(0, 'https://xlink' + (i + 1));
 

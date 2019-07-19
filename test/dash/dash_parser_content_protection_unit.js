@@ -104,7 +104,7 @@ describe('DashParser ContentProtection', () => {
     }
 
     const variants = [];
-    for (let i = 0; i < numVariants; i++) {
+    for (const i of shaka.util.Iterables.range(numVariants)) {
       const variant = jasmine.objectContaining({
         drmInfos: drmInfos,
         video: jasmine.objectContaining({
@@ -757,8 +757,7 @@ describe('In-manifest PlayReady and Widevine', () => {
         ].join('\n')),
       };
       const actual = ContentProtection.getWidevineLicenseUrl(input);
-      const expected = 'www.example.com';
-      expect(actual).toEqual(expected);
+      expect(actual).toBe('www.example.com');
     });
 
     it('ms:laurl without license url', () => {
@@ -773,8 +772,7 @@ describe('In-manifest PlayReady and Widevine', () => {
         ].join('\n')),
       };
       const actual = ContentProtection.getWidevineLicenseUrl(input);
-      const expected = '';
-      expect(actual).toEqual(expected);
+      expect(actual).toBe('');
     });
 
     it('no ms:laurl node', () => {
@@ -785,8 +783,7 @@ describe('In-manifest PlayReady and Widevine', () => {
         node: strToXml('<test></test>'),
       };
       const actual = ContentProtection.getWidevineLicenseUrl(input);
-      const expected = '';
-      expect(actual).toEqual(expected);
+      expect(actual).toBe('');
     });
   });
 
@@ -829,8 +826,7 @@ describe('In-manifest PlayReady and Widevine', () => {
         ].join('\n')),
       };
       const actual = ContentProtection.getPlayReadyLicenseUrl(input);
-      const expected = 'www.example.com';
-      expect(actual).toEqual(expected);
+      expect(actual).toBe('www.example.com');
     });
 
     it('no mspro', () => {
@@ -841,8 +837,7 @@ describe('In-manifest PlayReady and Widevine', () => {
         node: strToXml('<test></test>'),
       };
       const actual = ContentProtection.getPlayReadyLicenseUrl(input);
-      const expected = '';
-      expect(actual).toEqual(expected);
+      expect(actual).toBe('');
     });
   });
 });

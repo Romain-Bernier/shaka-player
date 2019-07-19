@@ -119,7 +119,15 @@ jasmine.Matchers.prototype.toBeGreaterThan = function(value) {};
 
 
 /** @param {*} value */
+jasmine.Matchers.prototype.toBeGreaterThanOrEqual = function(value) {};
+
+
+/** @param {*} value */
 jasmine.Matchers.prototype.toBeLessThan = function(value) {};
+
+
+/** @param {*} value */
+jasmine.Matchers.prototype.toBeLessThanOrEqual = function(value) {};
 
 
 jasmine.Matchers.prototype.toBeNaN = function() {};
@@ -368,7 +376,7 @@ var spyOn = function(obj, name) {};
 
 /**
  * @param {Function} factory
- * @return {?}
+ * @return {!Object}
  */
 jasmine.any = function(factory) {};
 

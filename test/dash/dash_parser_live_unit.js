@@ -139,6 +139,7 @@ describe('DashParser Live', () => {
       fakeNetEngine.setResponseText('dummy://foo', firstManifest);
       const manifest = await parser.start('dummy://foo', playerInterface);
       const stream = manifest.periods[0].variants[0].video;
+      await stream.createSegmentIndex();
       ManifestParser.verifySegmentIndex(stream, firstReferences);
       expect(manifest.periods.length).toBe(1);
 
@@ -187,8 +188,9 @@ describe('DashParser Live', () => {
       const stream = manifest.periods[0].variants[0].video;
       expect(stream).toBeTruthy();
 
-      expect(stream.findSegmentPosition).toBeTruthy();
-      expect(stream.findSegmentPosition(0)).toBe(1);
+      await stream.createSegmentIndex();
+      expect(stream.segmentIndex).toBeTruthy();
+      expect(stream.segmentIndex.find(0)).toBe(1);
       ManifestParser.verifySegmentIndex(stream, basicRefs);
 
       // The 30 second availability window is initially full in all cases
@@ -199,7 +201,7 @@ describe('DashParser Live', () => {
       Date.now = () => 11 * 1000;
       await updateManifest();
       // The first reference should have been evicted.
-      expect(stream.findSegmentPosition(0)).toBe(2);
+      expect(stream.segmentIndex.find(0)).toBe(2);
       ManifestParser.verifySegmentIndex(stream, basicRefs.slice(1));
     });
 
@@ -246,6 +248,8 @@ describe('DashParser Live', () => {
 
       const stream1 = manifest.periods[0].variants[0].video;
       const stream2 = manifest.periods[1].variants[0].video;
+      await stream1.createSegmentIndex();
+      await stream2.createSegmentIndex();
       ManifestParser.verifySegmentIndex(stream1, basicRefs);
       ManifestParser.verifySegmentIndex(stream2, basicRefs);
 
@@ -368,8 +372,8 @@ describe('DashParser Live', () => {
 
     expect(manifest.periods.length).toBe(1);
     // Should call filterAllPeriods for parsing the first manifest
-    expect(filterNewPeriod.calls.count()).toBe(0);
-    expect(filterAllPeriods.calls.count()).toBe(1);
+    expect(filterNewPeriod).not.toHaveBeenCalled();
+    expect(filterAllPeriods).toHaveBeenCalledTimes(1);
 
     fakeNetEngine.setResponseText('dummy://foo', secondManifest);
     await updateManifest();
@@ -377,8 +381,8 @@ describe('DashParser Live', () => {
     // Should update the same manifest object.
     expect(manifest.periods.length).toBe(2);
     // Should call filterNewPeriod for parsing the new manifest
-    expect(filterAllPeriods.calls.count()).toBe(1);
-    expect(filterNewPeriod.calls.count()).toBe(1);
+    expect(filterAllPeriods).toHaveBeenCalledTimes(1);
+    expect(filterNewPeriod).toHaveBeenCalledTimes(1);
   });
 
   it('uses redirect URL for manifest BaseURL and updates', async () => {
@@ -416,14 +420,15 @@ describe('DashParser Live', () => {
 
     // The manifest request was made to the original URL.
     // But includes a redirect
-    expect(fakeNetEngine.request.calls.count()).toBe(1);
+    expect(fakeNetEngine.request).toHaveBeenCalledTimes(1);
     const netRequest = fakeNetEngine.request.calls.argsFor(0)[1];
     expect(netRequest.uris).toEqual([redirectedUri, originalUri]);
 
     // Since the manifest request was redirected, the segment refers to
     // the redirected base.
     const stream = manifest.periods[0].variants[0].video;
-    const segmentUri = stream.getSegmentReference(1).getUris()[0];
+    await stream.createSegmentIndex();
+    const segmentUri = stream.segmentIndex.get(1).getUris()[0];
     expect(segmentUri).toBe(redirectedUri + 's1.mp4');
   });
 
@@ -439,7 +444,7 @@ describe('DashParser Live', () => {
     fakeNetEngine.setResponseText('dummy://foo', manifestText);
     await parser.start('dummy://foo', playerInterface);
 
-    expect(fakeNetEngine.request.calls.count()).toBe(1);
+    expect(fakeNetEngine.request).toHaveBeenCalledTimes(1);
 
     const error = new shaka.util.Error(
         shaka.util.Error.Severity.CRITICAL,
@@ -449,7 +454,7 @@ describe('DashParser Live', () => {
     fakeNetEngine.request.and.returnValue(operation);
 
     await updateManifest();
-    expect(onError.calls.count()).toBe(1);
+    expect(onError).toHaveBeenCalledTimes(1);
   });
 
   it('uses @minimumUpdatePeriod', async () => {
@@ -556,7 +561,7 @@ describe('DashParser Live', () => {
     const manifestRequest = shaka.net.NetworkingEngine.RequestType.MANIFEST;
     await parser.start('dummy://foo', playerInterface);
 
-    expect(fakeNetEngine.request.calls.count()).toBe(1);
+    expect(fakeNetEngine.request).toHaveBeenCalledTimes(1);
     fakeNetEngine.expectRequest('dummy://foo', manifestRequest);
     fakeNetEngine.request.calls.reset();
 
@@ -573,7 +578,7 @@ describe('DashParser Live', () => {
     });
 
     await updateManifest();
-    expect(fakeNetEngine.request.calls.count()).toBe(1);
+    expect(fakeNetEngine.request).toHaveBeenCalledTimes(1);
   });
 
   it('uses @suggestedPresentationDelay', async () => {
@@ -647,7 +652,7 @@ describe('DashParser Live', () => {
       // of 4 minutes.
       const end = timeline.getSegmentAvailabilityEnd();
       const start = timeline.getSegmentAvailabilityStart();
-      expect(end - start).toEqual(4 * 60);
+      expect(end - start).toBe(4 * 60);
     });
   });
 
@@ -803,7 +808,7 @@ describe('DashParser Live', () => {
               .toBeRejected();
       // start will only begin the network request, calling stop here will be
       // after the request has started but before any parsing has been done.
-      expect(fakeNetEngine.request.calls.count()).toBe(1);
+      expect(fakeNetEngine.request).toHaveBeenCalledTimes(1);
       parser.stop();
       await expectation;
 
@@ -825,7 +830,7 @@ describe('DashParser Live', () => {
 
       await updateManifest();
       // The request was made but should not be resolved yet.
-      expect(fakeNetEngine.request.calls.count()).toBe(1);
+      expect(fakeNetEngine.request).toHaveBeenCalledTimes(1);
       fakeNetEngine.expectRequest(manifestUri, manifestRequestType);
       fakeNetEngine.request.calls.reset();
       parser.stop();
@@ -846,7 +851,7 @@ describe('DashParser Live', () => {
 
       await Util.shortDelay();
       // This is the initial manifest request.
-      expect(fakeNetEngine.request.calls.count()).toBe(1);
+      expect(fakeNetEngine.request).toHaveBeenCalledTimes(1);
       fakeNetEngine.expectRequest(manifestUri, manifestRequestType);
       fakeNetEngine.request.calls.reset();
       // Resolve the manifest request and wait on the UTCTiming request.
@@ -855,7 +860,7 @@ describe('DashParser Live', () => {
       await Util.shortDelay();
 
       // This is the first UTCTiming request.
-      expect(fakeNetEngine.request.calls.count()).toBe(1);
+      expect(fakeNetEngine.request).toHaveBeenCalledTimes(1);
       fakeNetEngine.expectRequest(dateUri, dateRequestType);
       fakeNetEngine.request.calls.reset();
       // Interrupt the parser, then fail the request.
@@ -1020,10 +1025,22 @@ describe('DashParser Live', () => {
 
       expect(manifest.periods.length).toBe(1);
       const stream = manifest.periods[0].variants[0].video;
+      await stream.createSegmentIndex();
 
-      // In https://github.com/google/shaka-player/issues/1204, this
-      // failed an assertion and returned endTime == 0.
-      const ref = stream.getSegmentReference(1);
+      const liveEdge =
+          manifest.presentationTimeline.getSegmentAvailabilityEnd();
+
+      // In https://github.com/google/shaka-player/issues/1204, a get on the
+      // final segment failed an assertion and returned endTime == 0.
+      // Find the last segment by looking just before the live edge.  Looking
+      // right on the live edge creates test flake, and the segments are 2
+      // seconds in duration.
+      const idx = stream.segmentIndex.find(liveEdge - 0.5);
+      expect(idx).not.toBe(null);
+
+      // This should not throw an assertion.
+      const ref = stream.segmentIndex.get(idx);
+      // The segment's endTime should definitely not be 0.
       expect(ref.endTime).toBeGreaterThan(0);
     });
   });

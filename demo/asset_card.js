@@ -16,17 +16,20 @@
  */
 
 
+goog.provide('shakaDemo.AssetCard');
+
+
 /**
  * Creates and contains an MDL card that presents info about the given asset.
  * @final
  */
-class AssetCard {
+shakaDemo.AssetCard = class {
   /**
    * @param {!Element} parentDiv
    * @param {!ShakaDemoAssetInfo} asset
    * @param {boolean} isFeatured True if this card should use the "featured"
    *   style, which use the asset's short name and have descriptions.
-   * @param {function(!AssetCard)} remakeButtonsFn
+   * @param {function(!shakaDemo.AssetCard)} remakeButtonsFn
    */
   constructor(parentDiv, asset, isFeatured, remakeButtonsFn) {
     /** @private {!Element} */
@@ -39,7 +42,7 @@ class AssetCard {
     this.featureIconsContainer_ = document.createElement('div');
     /** @private {!Element} */
     this.progressBar_ = document.createElement('progress');
-    /** @private {function(!AssetCard)} */
+    /** @private {function(!shakaDemo.AssetCard)} */
     this.remakeButtonsFn_ = remakeButtonsFn;
 
     // Lay out the card.
@@ -116,7 +119,7 @@ class AssetCard {
     iconDiv.setAttribute('icon', icon);
     this.featureIconsContainer_.appendChild(iconDiv);
 
-    ShakaDemoTooltips.make(iconDiv, title);
+    shakaDemo.Tooltips.make(iconDiv, title);
   }
 
   /**
@@ -162,7 +165,7 @@ class AssetCard {
 
   /**
    * Modify an asset to make it clear that it is unsupported.
-   * @param {?string} unsupportedReason
+   * @param {string} unsupportedReason
    */
   markAsUnsupported(unsupportedReason) {
     this.card_.classList.add('asset-card-unsupported');
@@ -172,7 +175,7 @@ class AssetCard {
   /**
    * Make a button that represents the lack of a working button.
    * @param {string} buttonName
-   * @param {?string} unsupportedReason
+   * @param {string} unsupportedReason
    * @return {!Element}
    * @private
    */
@@ -183,16 +186,14 @@ class AssetCard {
     // Tooltips don't work on disabled buttons (on some platforms), so
     // the button itself has to be "uprooted" and placed in a synthetic div
     // specifically to attach the tooltip to.
-    if (unsupportedReason) {
-      const attachPoint = document.createElement('div');
-      if (button.parentElement) {
-        button.parentElement.removeChild(button);
-      }
-      attachPoint.classList.add('tooltip-attach-point');
-      attachPoint.appendChild(button);
-      this.actions_.appendChild(attachPoint);
-      ShakaDemoTooltips.make(attachPoint, unsupportedReason);
+    const attachPoint = document.createElement('div');
+    if (button.parentElement) {
+      button.parentElement.removeChild(button);
     }
+    attachPoint.classList.add('tooltip-attach-point');
+    attachPoint.appendChild(button);
+    this.actions_.appendChild(attachPoint);
+    shakaDemo.Tooltips.make(attachPoint, unsupportedReason);
 
     return button;
   }
@@ -240,7 +241,11 @@ class AssetCard {
 
     const unsupportedReason = shakaDemoMain.getAssetUnsupportedReason(
         this.asset_, /* needOffline= */ true);
-    if (unsupportedReason || !this.asset_.storeCallback) {
+    if (!unsupportedReason) {
+      goog.asserts.assert(this.asset_.storeCallback,
+          'A storage callback is expected for all supported assets!');
+    }
+    if (unsupportedReason) {
       // This can't be stored.
       const button = this.makeUnsupportedButton_('', unsupportedReason);
       // As this is a unsupported button, it is wrapped in an "attach point";
@@ -357,4 +362,4 @@ class AssetCard {
     this.actions_.appendChild(button);
     return button;
   }
-}
+};

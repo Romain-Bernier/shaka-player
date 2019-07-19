@@ -36,10 +36,10 @@ describe('Player', () => {
     document.body.appendChild(video);
 
     compiledShaka = await Util.loadShaka(getClientArg('uncompiled'));
-    await shaka.test.TestScheme.createManifests(compiledShaka, '_compiled');
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await shaka.test.TestScheme.createManifests(compiledShaka, '_compiled');
     player = new compiledShaka.Player(video);
 
     // Grab event manager from the uncompiled library:
@@ -125,6 +125,7 @@ describe('Player', () => {
     // Using mode='disabled' on TextTrack causes cues to go null, which leads
     // to a crash in TextEngine.  This validates that we do not trigger this
     // behavior when changing visibility of text.
+
     it('does not cause cues to be null', async () => {
       await player.load('test:sintel_compiled');
       video.play();
@@ -174,10 +175,10 @@ describe('Player', () => {
       // invalidate the test setup.
       expect(player.getTextTracks().length).not.toBe(0);
       const textTrack = player.getTextTracks()[0];
-      expect(textTrack.language).toEqual(preferredTextLanguage);
+      expect(textTrack.language).toBe(preferredTextLanguage);
 
       const variantTrack = player.getVariantTracks()[0];
-      expect(variantTrack.language).not.toEqual(textTrack.language);
+      expect(variantTrack.language).not.toBe(textTrack.language);
     });
 
     it('is not called automatically without language pref match', async () => {
@@ -200,10 +201,10 @@ describe('Player', () => {
       // would invalidate the test setup.
       expect(player.getTextTracks().length).not.toBe(0);
       const textTrack = player.getTextTracks()[0];
-      expect(textTrack.language).not.toEqual(preferredTextLanguage);
+      expect(textTrack.language).not.toBe(preferredTextLanguage);
 
       const variantTrack = player.getVariantTracks()[0];
-      expect(variantTrack.language).not.toEqual(textTrack.language);
+      expect(variantTrack.language).not.toBe(textTrack.language);
     });
 
     it('is not called automatically with audio and text match', async () => {
@@ -225,10 +226,10 @@ describe('Player', () => {
       // underlying content that would invalidate the test setup.
       expect(player.getTextTracks().length).not.toBe(0);
       const textTrack = player.getTextTracks()[0];
-      expect(textTrack.language).toEqual(preferredTextLanguage);
+      expect(textTrack.language).toBe(preferredTextLanguage);
 
       const variantTrack = player.getVariantTracks()[0];
-      expect(variantTrack.language).toEqual(textTrack.language);
+      expect(variantTrack.language).toBe(textTrack.language);
     });
 
     // Repro for https://github.com/google/shaka-player/issues/1879.
@@ -239,16 +240,51 @@ describe('Player', () => {
       displayer.appendSpy.and.callFake((added) => {
         cues = cues.concat(added);
       });
-      displayer.removeSpy.and.callFake(() => {
-        cues = [];
-      });
-      player.configure({textDisplayFactory: () => displayer});
+
+      player.configure('textDisplayFactory', Util.factoryReturns(displayer));
 
       const preferredTextLanguage = 'fa';  // The same as in the content itself
       player.configure({preferredTextLanguage: preferredTextLanguage});
 
       await player.load('test:sintel_realistic_compiled');
       await Util.delay(1);  // Allow the first segments to be appended.
+
+      expect(player.isTextTrackVisible()).toBe(true);
+      expect(displayer.isTextVisible()).toBe(true);
+      expect(cues.length).toBeGreaterThan(0);
+    });
+
+    it('actually appends cues for external text', async () => {
+      let cues = [];
+      /** @const {!shaka.test.FakeTextDisplayer} */
+      const displayer = new shaka.test.FakeTextDisplayer();
+      displayer.appendSpy.and.callFake((added) => {
+        cues = cues.concat(added);
+      });
+
+      player.configure({textDisplayFactory: () => displayer});
+
+      const eventManager = new shaka.util.EventManager();
+      /** @type {shaka.test.Waiter} */
+      const waiter = new shaka.test.Waiter(eventManager);
+
+
+      await player.load('test:sintel_no_text_compiled');
+      const locationUri = new goog.Uri(location.href);
+      const partialUri = new goog.Uri('/base/test/test/assets/text-clip.vtt');
+      const absoluteUri = locationUri.resolve(partialUri);
+      await player.addTextTrack(absoluteUri.toString(), 'en', 'subtitles',
+          'text/vtt');
+
+      const textTracks = player.getTextTracks();
+      expect(textTracks).toBeTruthy();
+      expect(textTracks.length).toBe(1);
+
+      player.setTextTrackVisibility(true);
+      await waiter.waitForEvent(player, 'texttrackvisibility');
+      // Wait for the text cues to get appended.
+      // TODO: this should be based on an event instead.
+      await Util.delay(1);
 
       expect(player.isTextTrackVisible()).toBe(true);
       expect(displayer.isTextVisible()).toBe(true);
@@ -273,7 +309,7 @@ describe('Player', () => {
       expect(textTracks.length).toBe(1);
 
       expect(textTracks[0].active).toBe(true);
-      expect(textTracks[0].language).toEqual('en');
+      expect(textTracks[0].language).toBe('en');
     });
 
     it('with cea closed captions', async () => {
@@ -282,7 +318,7 @@ describe('Player', () => {
       const textTracks = player.getTextTracks();
       expect(textTracks).toBeTruthy();
       expect(textTracks.length).toBe(1);
-      expect(textTracks[0].language).toEqual('en');
+      expect(textTracks[0].language).toBe('en');
     });
 
     it('while changing languages with short Periods', async () => {
@@ -353,8 +389,7 @@ describe('Player', () => {
       });
       textDisplayer.destroySpy.and.returnValue(Promise.resolve());
       player.configure({
-        // eslint-disable-next-line no-restricted-syntax
-        textDisplayFactory: function() { return textDisplayer; },
+        textDisplayFactory: Util.factoryReturns(textDisplayer),
       });
 
       // Make sure the configuration was taken.

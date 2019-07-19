@@ -23,6 +23,7 @@ This checks:
 """
 
 import argparse
+import ast
 import logging
 import os
 import re
@@ -108,6 +109,47 @@ def check_complete(_):
       logging.error('  ' + os.path.relpath(missing, base))
     return False
   return True
+
+
+def check_spelling(_):
+  """Checks that source files don't have any common misspellings."""
+  logging.info('Checking for common misspellings...')
+
+  complete = build.Build()
+  # Normally we don't need to include @core, but because we look at the build
+  # object directly, we need to include it here.  When using main(), it will
+  # call addCore which will ensure core is included.
+  if not complete.parse_build(['+@complete', '+@core'], os.getcwd()):
+    logging.error('Error parsing complete build')
+    return False
+  base = shakaBuildHelpers.get_source_base()
+  complete.include.update(shakaBuildHelpers.get_all_files(
+      os.path.join(base, 'test'), re.compile(r'.*\.js$')))
+  complete.include.update(shakaBuildHelpers.get_all_files(
+      os.path.join(base, 'demo'), re.compile(r'.*\.js$')))
+  complete.include.update(shakaBuildHelpers.get_all_files(
+      os.path.join(base, 'build'), re.compile(r'.*\.(js|py)$')))
+
+  with open(os.path.join(base, 'build', 'misspellings.txt')) as f:
+    misspellings = ast.literal_eval(f.read())
+  has_error = False
+  for path in complete.include:
+    with open(path) as f:
+      for i, line in enumerate(f):
+        for regex, replace_pattern in misspellings.items():
+          for match in re.finditer(regex, line):
+            repl = match.expand(replace_pattern)
+            if match.group(0).lower() == repl:
+              continue  # No-op suggestion
+
+            if not has_error:
+              logging.error('The following file(s) have misspellings:')
+            logging.error(
+                '  %s:%d:%d: Did you mean %r?' %
+                (os.path.relpath(path, base), i + 1, match.start() + 1, repl))
+            has_error = True
+
+  return not has_error
 
 
 def check_eslint_disable(_):
@@ -250,6 +292,7 @@ def main(args):
       check_js_lint,
       check_html_lint,
       check_complete,
+      check_spelling,
       check_eslint_disable,
       check_tests,
   ]

@@ -137,7 +137,7 @@ describe('DashParser Manifest', () => {
         new shaka.test.ManifestGenerator()
             .anyTimeline()
             .minBufferTime(75)
-            .addPeriod(jasmine.any(Number))
+            .addPeriod(/** @type {?} */ (jasmine.any(Number)))
               .addPartialVariant()
                 .language('en')
                 .bandwidth(200)
@@ -305,8 +305,8 @@ describe('DashParser Manifest', () => {
     const stream = manifest.periods[0].textStreams[0];
     await stream.createSegmentIndex();
     expect(stream.initSegmentReference).toBe(null);
-    expect(stream.findSegmentPosition(0)).toBe(1);
-    expect(stream.getSegmentReference(1))
+    expect(stream.segmentIndex.find(0)).toBe(1);
+    expect(stream.segmentIndex.get(1))
         .toEqual(new shaka.media.SegmentReference(1, 0, 30, (() => {
           return ['http://example.com/de.vtt'];
         }), 0, null));
@@ -429,6 +429,7 @@ describe('DashParser Manifest', () => {
     const manifest = await parser.start('dummy://foo', playerInterface);
     const variant = manifest.periods[0].variants[0];
     const stream = manifest.periods[0].variants[0].audio;
+    await stream.createSegmentIndex();
     expect(stream.initSegmentReference.getUris()[0])
         .toBe('http://example.com/%C8%A7.mp4');
     expect(variant.language).toBe('\u2603');
@@ -969,9 +970,11 @@ describe('DashParser Manifest', () => {
     const variant2 = manifest.periods[0].variants[1];
     expect(variant1.video).toBeTruthy();
     expect(variant2.video).toBeTruthy();
-    expect(variant1.video.getSegmentReference(1).getUris())
+    await variant1.video.createSegmentIndex();
+    await variant2.video.createSegmentIndex();
+    expect(variant1.video.segmentIndex.get(1).getUris())
         .toEqual(['dummy://foo/1.mp4']);
-    expect(variant2.video.getSegmentReference(1).getUris())
+    expect(variant2.video.segmentIndex.get(1).getUris())
         .toEqual(['dummy://foo/2.mp4']);
   });
 
@@ -1055,7 +1058,7 @@ describe('DashParser Manifest', () => {
       expect(manifest.periods[0].variants.length).toBe(1);
 
       const variant = manifest.periods[0].variants[0];
-      expect(variant.audio.channelsCount).toEqual(expectedNumChannels);
+      expect(variant.audio.channelsCount).toBe(expectedNumChannels);
     }
 
     it('parses outputChannelPositionList scheme', async () => {
@@ -1160,9 +1163,9 @@ describe('DashParser Manifest', () => {
     const manifest = await parser.start('dummy://foo', playerInterface);
     const variant = manifest.periods[0].variants[0];
     const textStream = manifest.periods[0].textStreams[0];
-    expect(variant.audio.originalId).toEqual('audio-en');
-    expect(variant.video.originalId).toEqual('video-sd');
-    expect(textStream.originalId).toEqual('text-en');
+    expect(variant.audio.originalId).toBe('audio-en');
+    expect(variant.video.originalId).toBe('video-sd');
+    expect(textStream.originalId).toBe('text-en');
   });
 
   it('override manifest value if ignoreMinBufferTime is true', async () => {
@@ -1186,7 +1189,7 @@ describe('DashParser Manifest', () => {
 
     const manifest = await parser.start('dummy://foo', playerInterface);
     const minBufferTime = manifest.minBufferTime;
-    expect(minBufferTime).toEqual(0);
+    expect(minBufferTime).toBe(0);
   });
 
   it('get manifest value if ignoreMinBufferTime is false', async () => {
@@ -1210,6 +1213,35 @@ describe('DashParser Manifest', () => {
 
     const manifest = await parser.start('dummy://foo', playerInterface);
     const minBufferTime = manifest.minBufferTime;
-    expect(minBufferTime).toEqual(75);
+    expect(minBufferTime).toBe(75);
+  });
+
+  it('does not set presentationDelay to NaN', async () => {
+    // NOTE: This is a regression test for #2015. It ensures that, if
+    // ignoreMinBufferTime is true and there is no suggestedPresentationDelay,
+    // we do not erroneously set presentationDelay to NaN.
+    const manifestText = [
+      '<MPD minBufferTime="PT75S">',
+      '  <Period id="1" duration="PT30S">',
+      '    <AdaptationSet id="1" mimeType="video/mp4">',
+      '      <Representation id="video-sd" width="640" height="480">',
+      '        <BaseURL>v-sd.mp4</BaseURL>',
+      '        <SegmentBase indexRange="100-200" />',
+      '      </Representation>',
+      '    </AdaptationSet>',
+      '  </Period>',
+      '</MPD>',
+    ].join('\n');
+
+    fakeNetEngine.setResponseText('dummy://foo', manifestText);
+    const config = shaka.util.PlayerConfiguration.createDefault().manifest;
+    config.dash.ignoreMinBufferTime = true;
+    parser.configure(config);
+
+    const manifest = await parser.start('dummy://foo', playerInterface);
+    const presentationTimeline = manifest.presentationTimeline;
+    const presentationDelay = presentationTimeline.getDelay();
+    expect(presentationDelay).not.toBeNaN();
+    expect(presentationDelay).toBe(config.dash.defaultPresentationDelay);
   });
 });

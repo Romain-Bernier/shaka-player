@@ -163,7 +163,7 @@ jasmine.Fetch = class {
             clearInterval(interval);
             reject(jasmine.Fetch.makeAbortError_());
           }
-        }, 200);
+        }, 10);
       }));
     }
     throw new Error('no known action');
@@ -289,10 +289,8 @@ jasmine.Fetch.Headers = class {
    * @param {Function} apply
    */
   forEach(apply) {
-    const contentsNames = Object.getOwnPropertyNames(this.contents);
-    for (let i = 0; i < contentsNames.length; i++) {
-      const contentsName = contentsNames[i];
-      apply(this.get(contentsName), contentsName, this);
+    for (const name of Object.getOwnPropertyNames(this.contents)) {
+      apply(this.get(name), name, this);
     }
   }
 

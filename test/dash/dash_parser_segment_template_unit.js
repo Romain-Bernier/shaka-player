@@ -88,10 +88,11 @@ describe('DashParser SegmentTemplate', () => {
 
       const stream = manifest.periods[0].variants[0].video;
       expect(stream).toBeTruthy();
+      await stream.createSegmentIndex();
       expect(stream.presentationTimeOffset).toBe(50);
-      expect(stream.getSegmentReference(0)).toEqual(
+      expect(stream.segmentIndex.get(0)).toEqual(
           ManifestParser.makeReference('s1.mp4', 0, 0, 10, baseUri));
-      expect(stream.getSegmentReference(1)).toEqual(
+      expect(stream.segmentIndex.get(1)).toEqual(
           ManifestParser.makeReference('s2.mp4', 1, 10, 20, baseUri));
     });
 
@@ -135,7 +136,7 @@ describe('DashParser SegmentTemplate', () => {
           Dash.makeManifestFromInit('init-500.mp4', 0, null));
       await Dash.callCreateSegmentIndex(manifest);
 
-      expect(fakeNetEngine.request.calls.count()).toBe(2);
+      expect(fakeNetEngine.request).toHaveBeenCalledTimes(2);
       fakeNetEngine.expectRangeRequest(
           'http://example.com/index-500.mp4', 0, null);
     });
@@ -159,7 +160,7 @@ describe('DashParser SegmentTemplate', () => {
           Dash.makeManifestFromInit('init-500.mp4', 0, null));
       await Dash.callCreateSegmentIndex(manifest);
 
-      expect(fakeNetEngine.request.calls.count()).toBe(2);
+      expect(fakeNetEngine.request).toHaveBeenCalledTimes(2);
       fakeNetEngine.expectRangeRequest(
           'http://example.com/index-500.mp4', 0, null);
     });
@@ -190,7 +191,7 @@ describe('DashParser SegmentTemplate', () => {
           Dash.makeManifestFromInit('init-500.webm', 0, null));
       await Dash.callCreateSegmentIndex(manifest);
 
-      expect(fakeNetEngine.request.calls.count()).toBe(3);
+      expect(fakeNetEngine.request).toHaveBeenCalledTimes(3);
       fakeNetEngine.expectRangeRequest(
           'http://example.com/init-500.webm', 0, null);
       fakeNetEngine.expectRangeRequest(
@@ -220,7 +221,7 @@ describe('DashParser SegmentTemplate', () => {
           Dash.makeManifestFromInit('init-500.mp4', 0, null));
       await Dash.callCreateSegmentIndex(manifest);
 
-      expect(fakeNetEngine.request.calls.count()).toBe(2);
+      expect(fakeNetEngine.request).toHaveBeenCalledTimes(2);
       fakeNetEngine.expectRangeRequest(
           'http://example.com/index-500.mp4', 0, null);
     });
@@ -248,7 +249,7 @@ describe('DashParser SegmentTemplate', () => {
           Dash.makeManifestFromInit('init-500.mp4', 0, null));
       await Dash.callCreateSegmentIndex(manifest);
 
-      expect(fakeNetEngine.request.calls.count()).toBe(2);
+      expect(fakeNetEngine.request).toHaveBeenCalledTimes(2);
       fakeNetEngine.expectRangeRequest(
           'http://example.com/index-500.mp4', 0, null);
     });
@@ -347,24 +348,66 @@ describe('DashParser SegmentTemplate', () => {
       const variants = actual.periods[0].variants;
       expect(variants.length).toBe(3);
 
-      expect(variants[0].video.findSegmentPosition(0)).toBe(0);
-      expect(variants[0].video.getSegmentReference(0)).toEqual(
+      await variants[0].video.createSegmentIndex();
+      await variants[1].video.createSegmentIndex();
+      await variants[2].video.createSegmentIndex();
+
+      expect(variants[0].video.segmentIndex.find(0)).toBe(0);
+      expect(variants[0].video.segmentIndex.get(0)).toEqual(
           ManifestParser.makeReference('1-0-100.mp4', 0, 0, 10, baseUri));
-      expect(variants[0].video.findSegmentPosition(12)).toBe(1);
-      expect(variants[0].video.getSegmentReference(1)).toEqual(
+      expect(variants[0].video.segmentIndex.find(12)).toBe(1);
+      expect(variants[0].video.segmentIndex.get(1)).toEqual(
           ManifestParser.makeReference('2-10-100.mp4', 1, 10, 20, baseUri));
-      expect(variants[1].video.findSegmentPosition(0)).toBe(0);
-      expect(variants[1].video.getSegmentReference(0)).toEqual(
+      expect(variants[1].video.segmentIndex.find(0)).toBe(0);
+      expect(variants[1].video.segmentIndex.get(0)).toEqual(
           ManifestParser.makeReference('1-0-200.mp4', 0, 0, 10, baseUri));
-      expect(variants[1].video.findSegmentPosition(12)).toBe(1);
-      expect(variants[1].video.getSegmentReference(1)).toEqual(
+      expect(variants[1].video.segmentIndex.find(12)).toBe(1);
+      expect(variants[1].video.segmentIndex.get(1)).toEqual(
           ManifestParser.makeReference('2-10-200.mp4', 1, 10, 20, baseUri));
-      expect(variants[2].video.findSegmentPosition(0)).toBe(0);
-      expect(variants[2].video.getSegmentReference(0)).toEqual(
+      expect(variants[2].video.segmentIndex.find(0)).toBe(0);
+      expect(variants[2].video.segmentIndex.get(0)).toEqual(
           ManifestParser.makeReference('1-0-300.mp4', 0, 0, 10, baseUri));
-      expect(variants[2].video.findSegmentPosition(12)).toBe(1);
-      expect(variants[2].video.getSegmentReference(1)).toEqual(
+      expect(variants[2].video.segmentIndex.find(12)).toBe(1);
+      expect(variants[2].video.segmentIndex.get(1)).toEqual(
           ManifestParser.makeReference('2-10-300.mp4', 1, 10, 20, baseUri));
+    });
+
+    it('create correct Uris when multiple representations', async () => {
+      const source = [
+        '<MPD>',
+        '  <Period duration="PT60S">',
+        '    <AdaptationSet mimeType="video/webm">',
+        '      <BaseURL>http://example.com</BaseURL>',
+        '      <SegmentTemplate timescale="1000"',
+        '         initialization="segment-$RepresentationID$.dash"',
+        '          media="segment-$RepresentationID$-$Time$.dash">',
+        '        <SegmentTimeline>',
+        '           <S t="0" d="6000" r="1176" />',
+        '         <S d="4520" />',
+        '       </SegmentTimeline>',
+        '      </SegmentTemplate>',
+        '      <Representation id="test1" bandwidth="100" />',
+        '      <Representation id="test2" bandwidth="200" />',
+        '      <Representation id="test3" bandwidth="300" />',
+        '    </AdaptationSet>',
+        '  </Period>',
+        '</MPD>',
+      ].join('\n');
+
+      fakeNetEngine.setResponseText('dummy://foo', source);
+      const actual = await parser.start('dummy://foo', playerInterface);
+      expect(actual).toBeTruthy();
+
+      const variants = actual.periods[0].variants;
+      expect(variants.length).toBe(3);
+      await variants[0].video.createSegmentIndex();
+      await variants[1].video.createSegmentIndex();
+      await variants[2].video.createSegmentIndex();
+
+      expect(variants[0].video.segmentIndex.find(2)).toBe(1);
+      expect(variants[0].video.segmentIndex.get(1).getUris()).toEqual(['http://example.com/segment-test1-0.dash']);
+      expect(variants[1].video.segmentIndex.get(1).getUris()).toEqual(['http://example.com/segment-test2-0.dash']);
+      expect(variants[2].video.segmentIndex.get(1).getUris()).toEqual(['http://example.com/segment-test3-0.dash']);
     });
   });
 

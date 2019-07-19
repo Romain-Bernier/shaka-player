@@ -18,6 +18,7 @@
 describe('TtmlTextParser', () => {
   const Cue = shaka.text.Cue;
   const CueRegion = shaka.text.CueRegion;
+  const Util = shaka.test.Util;
 
   it('supports no cues', () => {
     verifyHelper([],
@@ -43,21 +44,36 @@ describe('TtmlTextParser', () => {
     // When xml:space="default", ignore whitespace outside tags.
     verifyHelper(
         [
-          {start: 62.03, end: 62.05, payload: 'A B C'},
+          {
+            startTime: 62.03,
+            endTime: 62.05,
+            nestedCues: [{payload: 'A B C'}],
+            payload: '',
+          },
         ],
         '<tt xml:space="default">' + ttBody + '</tt>',
         {periodStart: 0, segmentStart: 0, segmentEnd: 0});
     // When xml:space="preserve", take them into account.
     verifyHelper(
         [
-          {start: 62.03, end: 62.05, payload: '\n       A    B   C  \n    '},
+          {
+            startTime: 62.03,
+            endTime: 62.05,
+            nestedCues: [{payload: ' A    B   C  '}],
+            payload: '',
+          },
         ],
         '<tt xml:space="preserve">' + ttBody + '</tt>',
         {periodStart: 0, segmentStart: 0, segmentEnd: 0});
     // The default value for xml:space is "default".
     verifyHelper(
         [
-          {start: 62.03, end: 62.05, payload: 'A B C'},
+          {
+            startTime: 62.03,
+            endTime: 62.05,
+            nestedCues: [{payload: 'A B C'}],
+            payload: '',
+          },
         ],
         '<tt>' + ttBody + '</tt>',
         {periodStart: 0, segmentStart: 0, segmentEnd: 0});
@@ -73,15 +89,34 @@ describe('TtmlTextParser', () => {
 
   it('rejects invalid time format', () => {
     errorHelper(shaka.util.Error.Code.INVALID_TEXT_CUE,
-        '<tt><body><p begin="test" end="test"></p></body></tt>');
+        '<tt><body><p begin="test" end="test">My very own cue</p></body></tt>');
     errorHelper(shaka.util.Error.Code.INVALID_TEXT_CUE,
-        '<tt><body><p begin="3.45" end="1a"></p></body></tt>');
+        '<tt><body><p begin="3.45" end="1a">An invalid cue</p></body></tt>');
+  });
+
+  it('supports spans as nestedCues of paragraphs', () => {
+    verifyHelper(
+        [
+          {
+            startTime: 62.05,
+            endTime: 3723.2,
+            payload: '',
+            nestedCues: [
+              {payload: 'First cue'},
+              {payload: '', spacer: true},
+              {payload: 'Second cue'},
+            ],
+          },
+        ],
+        '<tt><body><p begin="01:02.05" end="01:02:03.200">' +
+        '<span>First cue</span><br /><span>Second cue</span></p></body></tt>',
+        {periodStart: 0, segmentStart: 0, segmentEnd: 0});
   });
 
   it('supports colon formatted time', () => {
     verifyHelper(
         [
-          {start: 62.05, end: 3723.2, payload: 'Test'},
+          {startTime: 62.05, endTime: 3723.2, payload: 'Test'},
         ],
         '<tt><body><p begin="01:02.05" ' +
         'end="01:02:03.200">Test</p></body></tt>',
@@ -91,7 +126,7 @@ describe('TtmlTextParser', () => {
   it('accounts for offset', () => {
     verifyHelper(
         [
-          {start: 69.05, end: 3730.2, payload: 'Test'},
+          {startTime: 69.05, endTime: 3730.2, payload: 'Test'},
         ],
         '<tt><body><p begin="01:02.05" ' +
         'end="01:02:03.200">Test</p></body></tt>',
@@ -101,7 +136,7 @@ describe('TtmlTextParser', () => {
   it('supports time in 0.00h 0.00m 0.00s format', () => {
     verifyHelper(
         [
-          {start: 3567.03, end: 5402.3, payload: 'Test'},
+          {startTime: 3567.03, endTime: 5402.3, payload: 'Test'},
         ],
         '<tt><body><p begin="59.45m30ms" ' +
         'end="1.5h2.3s">Test</p></body></tt>',
@@ -111,7 +146,7 @@ describe('TtmlTextParser', () => {
   it('supports time with frame rate', () => {
     verifyHelper(
         [
-          {start: 615.5, end: 663, payload: 'Test'},
+          {startTime: 615.5, endTime: 663, payload: 'Test'},
         ],
         '<tt xmlns:ttp="http://www.w3.org/ns/ttml#parameter" ' +
         'ttp:frameRate="30"> ' +
@@ -125,7 +160,7 @@ describe('TtmlTextParser', () => {
   it('supports time with frame rate multiplier', () => {
     verifyHelper(
         [
-          {start: 615.5, end: 663, payload: 'Test'},
+          {startTime: 615.5, endTime: 663, payload: 'Test'},
         ],
         '<tt xmlns:ttp="http://www.w3.org/ns/ttml#parameter" ' +
         'ttp:frameRate="60" ' +
@@ -140,7 +175,11 @@ describe('TtmlTextParser', () => {
   it('supports time with subframes', () => {
     verifyHelper(
         [
-          {start: 615.517, end: 663, payload: 'Test'},
+          {
+            startTime: Util.closeTo(615.5 + 1 / 60),
+            endTime: 663,
+            payload: 'Test',
+          },
         ],
         '<tt xmlns:ttp="http://www.w3.org/ns/ttml#parameter" ' +
         'ttp:frameRate="30" ' +
@@ -155,7 +194,7 @@ describe('TtmlTextParser', () => {
   it('supports time in frame format', () => {
     verifyHelper(
         [
-          {start: 2.5, end: 10.01, payload: 'Test'},
+          {startTime: 2.5, endTime: Util.closeTo(10.01), payload: 'Test'},
         ],
         '<tt xmlns:ttp="http://www.w3.org/ns/ttml#parameter" ' +
         'ttp:frameRate="60" ' +
@@ -170,7 +209,7 @@ describe('TtmlTextParser', () => {
   it('supports time in tick format', () => {
     verifyHelper(
         [
-          {start: 5, end: 6.02, payload: 'Test'},
+          {startTime: 5, endTime: Util.closeTo(6.02), payload: 'Test'},
         ],
         '<tt xmlns:ttp="http://www.w3.org/ns/ttml#parameter" ' +
         'ttp:frameRate="60" ' +
@@ -185,7 +224,7 @@ describe('TtmlTextParser', () => {
   it('supports time with duration', () => {
     verifyHelper(
         [
-          {start: 62.05, end: 67.05, payload: 'Test'},
+          {startTime: 62.05, endTime: 67.05, payload: 'Test'},
         ],
         '<tt><body><p begin="01:02.05" ' +
         'dur="5s">Test</p></body></tt>',
@@ -196,8 +235,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             lineAlign: Cue.textAlign.START,
           },
@@ -217,8 +256,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             lineAlign: Cue.textAlign.START,
           },
@@ -238,8 +277,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             lineAlign: Cue.textAlign.END,
           },
@@ -262,8 +301,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             lineAlign: Cue.textAlign.END,
           },
@@ -286,8 +325,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             region: {
               id: 'subtitleArea',
@@ -310,8 +349,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             region: {
               viewportAnchorX: 50,
@@ -334,8 +373,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             region: {
               viewportAnchorX: 50,
@@ -361,8 +400,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             region: {
               id: 'subtitleArea',
@@ -391,8 +430,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             region: {
               id: 'subtitleArea',
@@ -425,8 +464,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             region: {
               id: 'subtitleArea',
@@ -450,8 +489,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             region: {
               viewportAnchorX: 50,
@@ -474,8 +513,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             region: {
               viewportAnchorX: 50,
@@ -501,8 +540,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             writingMode: Cue.writingMode.VERTICAL_LEFT_TO_RIGHT,
           },
@@ -520,8 +559,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             writingMode: Cue.writingMode.VERTICAL_RIGHT_TO_LEFT,
           },
@@ -539,8 +578,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             writingMode: Cue.writingMode.VERTICAL_LEFT_TO_RIGHT,
           },
@@ -558,8 +597,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             direction: Cue.direction.HORIZONTAL_RIGHT_TO_LEFT,
           },
@@ -577,8 +616,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             direction: Cue.direction.HORIZONTAL_LEFT_TO_RIGHT,
           },
@@ -598,7 +637,7 @@ describe('TtmlTextParser', () => {
   it('disregards empty divs and ps', () => {
     verifyHelper(
         [
-          {start: 62.05, end: 3723.2, payload: 'Test'},
+          {startTime: 62.05, endTime: 3723.2, payload: 'Test'},
         ],
         '<tt>' +
         '<body>' +
@@ -611,7 +650,7 @@ describe('TtmlTextParser', () => {
         {periodStart: 0, segmentStart: 0, segmentEnd: 0});
     verifyHelper(
         [
-          {start: 62.05, end: 3723.2, payload: 'Test'},
+          {startTime: 62.05, endTime: 3723.2, payload: 'Test'},
         ],
         '<tt>' +
         '<body>' +
@@ -635,17 +674,65 @@ describe('TtmlTextParser', () => {
         {periodStart: 0, segmentStart: 0, segmentEnd: 0});
   });
 
+  it('should let empty paragraphs with begin or end attributes through', () => {
+    verifyHelper(
+        [
+          {startTime: 62.05, endTime: 3723.2, payload: ''},
+        ],
+        '<tt>' +
+        '<body>' +
+        '<div>' +
+        '<p begin="01:02.05" end="01:02:03.200" />' +
+        '<p></p>' +
+        '</div>' +
+        '</body>' +
+        '</tt>',
+        {periodStart: 0, segmentStart: 0, segmentEnd: 0});
+  });
+
+  it('supports smpte:backgroundImage attribute', () => {
+    verifyHelper(
+        [
+          {
+            startTime: 62.05,
+            endTime: 3723.2,
+            payload: '',
+            backgroundImage: 'data:image/png;base64,base64EncodedImage',
+          },
+        ],
+        '<tt ' +
+        'xmlns:ttm="http://www.w3.org/ns/ttml#metadata" ' +
+        'xmlns:smpte="http://www.smpte-ra.org/schemas/2052-1/2010/smpte-tt">' +
+        '<metadata>' +
+        '<smpte:image imagetype="PNG" encoding="Base64" xml:id="img_0">' +
+        'base64EncodedImage</smpte:image>' +
+        '</metadata>' +
+        '<body>' +
+        '<div>' +
+        '<p begin="01:02.05" end="01:02:03.200" ' +
+        'smpte:backgroundImage="#img_0" />' +
+        '</div>' +
+        '</body>' +
+        '</tt>',
+        {periodStart: 0, segmentStart: 0, segmentEnd: 0});
+  });
+
   it('inserts newline characters into <br> tags', () => {
     verifyHelper(
         [
-          {start: 62.05, end: 3723.2, payload: 'Line1\nLine2'},
+          {startTime: 62.05, endTime: 3723.2, payload: 'Line1\nLine2'},
         ],
         '<tt><body><p begin="01:02.05" ' +
         'end="01:02:03.200">Line1<br/>Line2</p></body></tt>',
         {periodStart: 0, segmentStart: 0, segmentEnd: 0});
     verifyHelper(
         [
-          {start: 62.05, end: 3723.2, payload: 'Line1\nLine2'},
+          {
+            startTime: 62.05,
+            endTime: 3723.2,
+            nestedCues: [{payload: 'Line1\nLine2'}],
+            payload: '',
+          },
         ],
         '<tt><body><p begin="01:02.05" ' +
         'end="01:02:03.200"><span>Line1<br/>Line2</span></p></body></tt>',
@@ -656,8 +743,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             lineAlign: Cue.lineAlign.START,
             textAlign: Cue.textAlign.LEFT,
@@ -682,8 +769,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             color: 'red',
             backgroundColor: 'blue',
@@ -718,8 +805,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             wrapLine: false,
           },
@@ -742,8 +829,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             textDecoration: [Cue.textDecoration.UNDERLINE,
               Cue.textDecoration.OVERLINE],
@@ -769,8 +856,8 @@ describe('TtmlTextParser', () => {
     verifyHelper(
         [
           {
-            start: 62.05,
-            end: 3723.2,
+            startTime: 62.05,
+            endTime: 3723.2,
             payload: 'Test',
             color: 'blue',
           },
@@ -790,6 +877,33 @@ describe('TtmlTextParser', () => {
         {periodStart: 0, segmentStart: 0, segmentEnd: 0});
   });
 
+  it('can parse multiple cues', () => {
+    verifyHelper(
+        [
+          {startTime: 1, endTime: 2, payload: 'First cue'},
+          {startTime: 3, endTime: 4, payload: 'Second cue'},
+        ],
+        '<tt><body>' +
+        '<p begin="00:01.00" end="00:02.00">First cue</p>' +
+        '<p begin="00:03.00" end="00:04.00">Second cue</p>' +
+        '</body></tt>',
+        {periodStart: 0, segmentStart: 0, segmentEnd: 0});
+  });
+
+  it('can parse individual cues', () => {
+    // The parseFirstCue method also has to support partial segments.
+    const text =
+        '<tt><body>' +
+        '<p begin="00:01.00" end="00:02.00">First cue</p>' +
+        '<p begin="00:03.00" end="00:04.00">Sec   ';
+    const data = new Uint8Array(shaka.util.StringUtils.toUTF8(text));
+    const time = {periodStart: 0, segmentStart: 0, segmentEnd: 0};
+    const cue = new shaka.text.TtmlTextParser().parseFirstCue(data, time);
+    expect(cue.startTime).toBe(1);
+    expect(cue.endTime).toBe(2);
+    expect(cue.payload).toBe('First cue');
+  });
+
 
   /**
    * @param {!Array} cues
@@ -799,55 +913,21 @@ describe('TtmlTextParser', () => {
   function verifyHelper(cues, text, time) {
     const data = new Uint8Array(shaka.util.StringUtils.toUTF8(text));
     const result = new shaka.text.TtmlTextParser().parseMedia(data, time);
-    const properties = ['textAlign', 'lineAlign', 'positionAlign', 'size',
-      'line', 'position', 'direction', 'color', 'writingMode',
-      'backgroundColor', 'fontWeight', 'fontFamily',
-      'wrapLine', 'lineHeight', 'fontStyle', 'fontSize'];
-    expect(result).toBeTruthy();
-    expect(result.length).toBe(cues.length);
-    for (let i = 0; i < cues.length; i++) {
-      expect(result[i].startTime).toBeCloseTo(cues[i].start, 3);
-      expect(result[i].endTime).toBeCloseTo(cues[i].end, 3);
-      expect(result[i].payload).toBe(cues[i].payload);
 
-      if (cues[i].region) {
-        verifyRegion(cues[i].region, result[i].region);
+    const expected = cues.map((cue) => {
+      if (cue.region) {
+        cue.region = jasmine.objectContaining(cue.region);
       }
 
-      const asObj = /** @type {!Object} */ (result[i]);
-      for (const property of properties) {
-        if (property in cues[i]) {
-          expect(asObj[property]).toEqual(cues[i][property]);
-        }
+      if (cue.nestedCues) {
+        cue.nestedCues = cue.nestedCues.map(
+            (nestedCue) => jasmine.objectContaining(nestedCue)
+        );
       }
 
-      if (cues[i].textDecoration) {
-        for (let j = 0; j < cues[i].textDecoration.length; j++) {
-          expect(/** @type {?} */ (result[i]).textDecoration[j])
-              .toBe(cues[i].textDecoration[j]);
-        }
-      }
-    }
-  }
-
-
-  /**
-   * @param {!Object} expected
-   * @param {shaka.extern.CueRegion} actual
-   */
-  function verifyRegion(expected, actual) {
-    const properties = ['id', 'viewportAnchorX', 'viewportAnchorY',
-      'regionAnchorX', 'regionAnchorY', 'width', 'height',
-      'heightUnits', 'widthUnits', 'viewportAnchorUnits',
-      'scroll'];
-    expect(actual).toBeTruthy();
-
-    const asObj = /** @type {!Object} */ (actual);
-    for (const property of properties) {
-      if (property in expected) {
-        expect(asObj[property]).toEqual(expected[property]);
-      }
-    }
+      return jasmine.objectContaining(cue);
+    });
+    expect(result).toEqual(expected);
   }
 
 

@@ -47,6 +47,11 @@ const commonNoRestrictedSyntax = [
     'selector': 'MemberExpression[property.name="prototype"]',
     'message': 'Use ES6 classes not .prototype.',
   },
+  {
+    'selector': 'BinaryExpression[operator=/^([<>!=]=?)$/] > ' +
+                'CallExpression[callee.property.name=indexOf]',
+    'message': 'Use Array.includes instead of indexOf.',
+  },
 ];
 
 module.exports = {
@@ -209,6 +214,18 @@ module.exports = {
           {
             'selector': 'CatchClause',
             'message': 'Use expect.toFail or expectAsync.toBeRejected',
+          },
+          {
+            'selector': 'CallExpression[callee.name=expect] >' +
+                        'CallExpression[callee.property.name=count]' +
+                        '[callee.object.property.name=calls]',
+            'message': 'Use expect.toHaveBeenCalledTimes',
+          },
+          {
+            'selector':
+                'CallExpression[callee.property.name=toHaveBeenCalledTimes] >' +
+                'Literal[value=0]',
+            'message': 'Use expect.not.toHaveBeenCalled',
           },
           ...commonNoRestrictedSyntax,
         ],

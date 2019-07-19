@@ -352,6 +352,40 @@ describe('HlsParser', () => {
     await testHlsParser(master, media, manifest);
   });
 
+  it('parses audio+video variant with legacy codecs', async () => {
+    const master = [
+      '#EXTM3U\n',
+      '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud1",LANGUAGE="eng",',
+      'CHANNELS="2",URI="audio"\n',
+      '#EXT-X-STREAM-INF:BANDWIDTH=200,CODECS="avc1,mp4a.40.34",',
+      'RESOLUTION=960x540,FRAME-RATE=60,AUDIO="aud1"\n',
+      'video\n',
+    ].join('');
+
+    const media = [
+      '#EXTM3U\n',
+      '#EXT-X-PLAYLIST-TYPE:VOD\n',
+      '#EXT-X-MAP:URI="init.mp4",BYTERANGE="616@0"\n',
+      '#EXTINF:5,\n',
+      '#EXT-X-BYTERANGE:121090@616\n',
+      'main.mp4',
+    ].join('');
+
+    /* eslint-disable indent */
+    const manifest = new shaka.test.ManifestGenerator()
+        .anyTimeline()
+        .addPeriod(0)
+          .addPartialVariant()
+            .addPartialStream(ContentType.VIDEO)
+              .mime('video/mp4', 'avc1')
+            .addPartialStream(ContentType.AUDIO)
+              .mime('audio/mp4', '')
+        .build();
+    /* eslint-enable indent */
+
+    await testHlsParser(master, media, manifest);
+  });
+
   it('parses audio+video variant with closed captions', async () => {
     const master = [
       '#EXTM3U\n',
@@ -500,9 +534,10 @@ describe('HlsParser', () => {
     const stream = manifest.periods[0].variants[0].video;
     // baseMediaDecodeTime (655360) / timescale (1000)
     expect(stream.presentationTimeOffset).toBe(655.36);
-    const pos = stream.findSegmentPosition(0);
+    await stream.createSegmentIndex();
+    const pos = stream.segmentIndex.find(0);
     expect(pos).not.toBe(null);
-    expect(stream.getSegmentReference(pos).startTime).toBe(0);
+    expect(stream.segmentIndex.get(pos).startTime).toBe(0);
     expect(presentationTimeline.getSeekRangeStart()).toBe(0);
     expect(presentationTimeline.getSeekRangeEnd()).toBe(5);
   });
@@ -560,7 +595,7 @@ describe('HlsParser', () => {
         .addPeriod(0)
           .addPartialVariant()
             .addPartialStream(ContentType.VIDEO)
-              .mime('video/mp4', jasmine.any(String))
+              .mime('video/mp4', /** @type {?} */ (jasmine.any(String)))
         .build();
     /* eslint-enable indent */
 
@@ -592,9 +627,9 @@ describe('HlsParser', () => {
         .addPeriod(0)
           .addPartialVariant()
             .addPartialStream(ContentType.VIDEO)
-              .mime('video/mp4', jasmine.any(String))
+              .mime('video/mp4', /** @type {?} */ (jasmine.any(String)))
             .addPartialStream(ContentType.AUDIO)
-              .mime('audio/mp4', jasmine.any(String))
+              .mime('audio/mp4', /** @type {?} */ (jasmine.any(String)))
         .build();
     /* eslint-enable indent */
 
@@ -625,7 +660,7 @@ describe('HlsParser', () => {
         .addPeriod(0)
           .addPartialVariant()
             .addPartialStream(ContentType.VIDEO)
-              .mime('video/mp4', jasmine.any(String))
+              .mime('video/mp4', /** @type {?} */ (jasmine.any(String)))
         .build();
     /* eslint-enable indent */
 
@@ -656,7 +691,7 @@ describe('HlsParser', () => {
         .addPeriod(0)
           .addPartialVariant()
             .addPartialStream(ContentType.AUDIO)
-              .mime('audio/mp4', jasmine.any(String))
+              .mime('audio/mp4', /** @type {?} */ (jasmine.any(String)))
         .build();
     /* eslint-enable indent */
 
@@ -779,7 +814,7 @@ describe('HlsParser', () => {
     playerInterface.filterAllPeriods = Util.spyFunc(filterAllPeriods);
 
     await parser.start('test:/master', playerInterface);
-    expect(filterAllPeriods.calls.count()).toBe(1);
+    expect(filterAllPeriods).toHaveBeenCalledTimes(1);
   });
 
   it('gets mime type from header request', async () => {
@@ -818,7 +853,7 @@ describe('HlsParser', () => {
     await testHlsParser(master, media, manifest);
   });
 
-  it('parses manifest with text streams', async () => {
+  it('parses manifest with SUBTITLES', async () => {
     const master = [
       '#EXTM3U\n',
       '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud1",LANGUAGE="eng",',
@@ -887,6 +922,7 @@ describe('HlsParser', () => {
   });
 
   it('parses manifest with text streams without SUBTITLES', async () => {
+    // The variant tag doesn't contain a 'SUBTITLES' attribute.
     const master = [
       '#EXTM3U\n',
       '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="aud1",LANGUAGE="eng",',
@@ -1127,7 +1163,7 @@ describe('HlsParser', () => {
     /* eslint-disable indent */
     const manifest = new shaka.test.ManifestGenerator()
         .anyTimeline()
-        .addPeriod(jasmine.any(Number))
+        .addPeriod(/** @type {?} */ (jasmine.any(Number)))
           .addPartialVariant()
             .addPartialStream(ContentType.VIDEO)
           .addPartialStream(ContentType.TEXT)
@@ -1213,24 +1249,27 @@ describe('HlsParser', () => {
     const video = actual.periods[0].variants[0].video;
     const audio = actual.periods[0].variants[0].audio;
 
-    const videoPosition = video.findSegmentPosition(0);
-    const audioPosition = audio.findSegmentPosition(0);
+    await video.createSegmentIndex();
+    await audio.createSegmentIndex();
+
+    const videoPosition = video.segmentIndex.find(0);
+    const audioPosition = audio.segmentIndex.find(0);
     goog.asserts.assert(
         videoPosition != null, 'Cannot find first video segment');
     goog.asserts.assert(
         audioPosition != null, 'Cannot find first audio segment');
 
-    const videoReference = video.getSegmentReference(videoPosition);
-    const audioReference = audio.getSegmentReference(audioPosition);
+    const videoReference = video.segmentIndex.get(videoPosition);
+    const audioReference = audio.segmentIndex.get(audioPosition);
     expect(videoReference).not.toBe(null);
     expect(audioReference).not.toBe(null);
     if (videoReference) {
-      expect(videoReference.getUris()[0])
-          .toEqual('test:/host/video/segment.mp4');
+      expect(videoReference.getUris())
+          .toEqual(['test:/host/video/segment.mp4']);
     }
     if (audioReference) {
-      expect(audioReference.getUris()[0])
-          .toEqual('test:/host/audio/segment.mp4');
+      expect(audioReference.getUris())
+          .toEqual(['test:/host/audio/segment.mp4']);
     }
   });
 
@@ -1679,6 +1718,7 @@ describe('HlsParser', () => {
 
       const manifest = await parser.start('test:/master', playerInterface);
       const video = manifest.periods[0].variants[0].video;
+      await video.createSegmentIndex();
       ManifestParser.verifySegmentIndex(video, [ref]);
 
       // Make sure the segment data was fetched with the correct byte
@@ -1690,7 +1730,7 @@ describe('HlsParser', () => {
 
       // In VOD content, we set the presentationTimeOffset to align the
       // content to presentation time 0.
-      expect(video.presentationTimeOffset).toEqual(segmentDataStartTime);
+      expect(video.presentationTimeOffset).toBe(segmentDataStartTime);
     });
 
     it('parses start time from ts segments', async () => {
@@ -1712,6 +1752,7 @@ describe('HlsParser', () => {
 
       const manifest = await parser.start('test:/master', playerInterface);
       const video = manifest.periods[0].variants[0].video;
+      await video.createSegmentIndex();
       ManifestParser.verifySegmentIndex(video, [ref]);
 
       // Make sure the segment data was fetched with the correct byte
@@ -1723,7 +1764,7 @@ describe('HlsParser', () => {
 
       // In VOD content, we set the presentationTimeOffset to align the
       // content to presentation time 0.
-      expect(video.presentationTimeOffset).toEqual(segmentDataStartTime);
+      expect(video.presentationTimeOffset).toBe(segmentDataStartTime);
     });
 
     // We want to make sure that we can interrupt the parser while it is getting
@@ -1777,14 +1818,15 @@ describe('HlsParser', () => {
       const manifest = await parser.start('test:/master', playerInterface);
       const presentationTimeline = manifest.presentationTimeline;
       const video = manifest.periods[0].variants[0].video;
-      const ref = video.getSegmentReference(0);
-      expect(video.getSegmentReference(1)).toBe(null);  // No more references.
+      await video.createSegmentIndex();
+      const ref = video.segmentIndex.get(0);
+      expect(video.segmentIndex.get(1)).toBe(null);  // No more references.
 
-      expect(video.presentationTimeOffset).toEqual(segmentDataStartTime);
+      expect(video.presentationTimeOffset).toBe(segmentDataStartTime);
       // The duration should be set to the sum of the segment durations (5),
       // even though the endTime of the segment is larger.
-      expect(ref.endTime - ref.startTime).toEqual(5);
-      expect(presentationTimeline.getDuration()).toEqual(5);
+      expect(ref.endTime - ref.startTime).toBe(5);
+      expect(presentationTimeline.getDuration()).toBe(5);
     });
   });
 

@@ -17,6 +17,8 @@
 
 goog.provide('shaka.test.StreamingEngineUtil');
 
+goog.require('shaka.util.Iterables');
+
 
 shaka.test.StreamingEngineUtil = class {
   /**
@@ -57,7 +59,7 @@ shaka.test.StreamingEngineUtil = class {
       const periodNumber = Number(parts[0]);
       expect(periodNumber).not.toBeNaN();
       expect(periodNumber).toBeGreaterThan(0);
-      expect(Math.floor(periodNumber)).toEqual(periodNumber);
+      expect(Math.floor(periodNumber)).toBe(periodNumber);
 
       const contentType = parts[1];
 
@@ -68,7 +70,7 @@ shaka.test.StreamingEngineUtil = class {
         const position = Number(parts[2]);
         expect(position).not.toBeNaN();
         expect(position).toBeGreaterThan(0);
-        expect(Math.floor(position)).toEqual(position);
+        expect(Math.floor(position)).toBe(position);
         buffer = getSegment(contentType, periodNumber, position);
       }
 
@@ -236,9 +238,10 @@ shaka.test.StreamingEngineUtil = class {
 
     // Populate the Manifest.
     let id = 0;
-    for (let i = 0; i < periodStartTimes.length; ++i) {
+    const enumerate = (it) => shaka.util.Iterables.enumerate(it);
+    for (const {i, item} of enumerate(periodStartTimes)) {
       const period = {
-        startTime: periodStartTimes[i],
+        startTime: item,
         variants: [],
         textStreams: [],
       };
@@ -250,9 +253,9 @@ shaka.test.StreamingEngineUtil = class {
         const stream =
             shaka.test.StreamingEngineUtil.createMockStream(type, id++);
         stream.createSegmentIndex.and.returnValue(Promise.resolve());
-        stream.findSegmentPosition.and.callFake(
+        stream.segmentIndex.find.and.callFake(
             (time) => find(type, i + 1, time));
-        stream.getSegmentReference.and.callFake((pos) => get(type, i + 1, pos));
+        stream.segmentIndex.get.and.callFake((pos) => get(type, i + 1, pos));
 
         const ContentType = shaka.util.ManifestParserUtils.ContentType;
         if (type == ContentType.TEXT) {
@@ -342,8 +345,7 @@ shaka.test.StreamingEngineUtil = class {
     return {
       id: id,
       createSegmentIndex: jasmine.createSpy('createSegmentIndex'),
-      findSegmentPosition: jasmine.createSpy('findSegmentPosition'),
-      getSegmentReference: jasmine.createSpy('getSegmentReference'),
+      segmentIndex: new shaka.test.FakeSegmentIndex(),
       initSegmentReference: null,
       presentationTimeOffset: 0,
       mimeType: 'audio/mp4',
@@ -364,8 +366,7 @@ shaka.test.StreamingEngineUtil = class {
     return {
       id: id,
       createSegmentIndex: jasmine.createSpy('createSegmentIndex'),
-      findSegmentPosition: jasmine.createSpy('findSegmentPosition'),
-      getSegmentReference: jasmine.createSpy('getSegmentReference'),
+      segmentIndex: new shaka.test.FakeSegmentIndex(),
       initSegmentReference: null,
       presentationTimeOffset: 0,
       mimeType: 'video/mp4',
@@ -388,8 +389,7 @@ shaka.test.StreamingEngineUtil = class {
     return {
       id: id,
       createSegmentIndex: jasmine.createSpy('createSegmentIndex'),
-      findSegmentPosition: jasmine.createSpy('findSegmentPosition'),
-      getSegmentReference: jasmine.createSpy('getSegmentReference'),
+      segmentIndex: new shaka.test.FakeSegmentIndex(),
       initSegmentReference: null,
       presentationTimeOffset: 0,
       mimeType: 'text/vtt',
